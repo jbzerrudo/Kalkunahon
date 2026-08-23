@@ -1,0 +1,1888 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Offline meteorological calculator: wind and tropical cyclone, moisture, pressure and altitude, thermodynamics. Every result cited.">
+<meta name="theme-color" content="#05687A">
+<link rel="manifest" href="manifest.webmanifest">
+<title>MeteoCalc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#DFE6E9; --panel:#F7F9FA; --panel-2:#EBF0F2; --panel-3:#E2E9EC;
+  --ink:#0E1A20; --ink-2:#485B65; --ink-3:#7A8D96;
+  --line:#C3D0D6; --line-2:#D5DFE3;
+  --accent:#05687A; --accent-ink:#FFFFFF; --accent-soft:#CFE4E9;
+  --warn:#8F4E00; --warn-bg:#F5E6D2; --warn-line:#DFC199;
+  --cold:#1A5FA6; --warm:#AE3527; --good:#2C6B4F;
+  --shadow:0 1px 2px rgba(14,26,32,.05), 0 6px 18px rgba(14,26,32,.05);
+  --radius:3px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A1216; --panel:#111C22; --panel-2:#16232A; --panel-3:#1B2B33;
+    --ink:#E3EDF1; --ink-2:#9BAFB9; --ink-3:#6A7E89;
+    --line:#25353E; --line-2:#1D2B32;
+    --accent:#57C6DA; --accent-ink:#03212A; --accent-soft:#10303A;
+    --warn:#E2A85F; --warn-bg:#2E2211; --warn-line:#5A421D;
+    --cold:#78B0EE; --warm:#EB8C80; --good:#63BA92;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A1216; --panel:#111C22; --panel-2:#16232A; --panel-3:#1B2B33;
+  --ink:#E3EDF1; --ink-2:#9BAFB9; --ink-3:#6A7E89;
+  --line:#25353E; --line-2:#1D2B32;
+  --accent:#57C6DA; --accent-ink:#03212A; --accent-soft:#10303A;
+  --warn:#E2A85F; --warn-bg:#2E2211; --warn-line:#5A421D;
+  --cold:#78B0EE; --warm:#EB8C80; --good:#63BA92;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:Archivo,'Helvetica Neue',Arial,sans-serif;
+  font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace}
+
+/* ---- shell ---- */
+.top{
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+  padding:.7rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:baseline; gap:.6rem; margin-right:auto}
+.brand h1{
+  margin:0; font-size:19px; font-weight:700; letter-spacing:-.015em;
+}
+.brand .tag{
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase;
+  letter-spacing:.14em; color:var(--ink-3);
+}
+.pill{
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; padding:.28rem .5rem; border:1px solid var(--line);
+  border-radius:var(--radius); color:var(--ink-2); background:var(--panel-2);
+}
+.tbtn{
+  font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; padding:.34rem .6rem; cursor:pointer;
+  border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--panel-2); color:var(--ink-2);
+}
+.tbtn:hover{border-color:var(--accent); color:var(--accent)}
+
+.app{display:grid; grid-template-columns:214px minmax(0,1fr); align-items:start; min-width:0}
+.rail{
+  min-width:0; position:sticky; top:53px; align-self:start; padding:1.1rem .8rem;
+  border-right:1px solid var(--line); min-height:calc(100vh - 53px);
+}
+.rail h2{
+  font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3); margin:0 0 .6rem .5rem; font-weight:500;
+}
+.rail nav{display:flex; flex-direction:column; gap:1px}
+.rail a{
+  display:flex; align-items:baseline; gap:.55rem; padding:.46rem .55rem;
+  text-decoration:none; color:var(--ink-2); border-radius:var(--radius);
+  font-size:13.5px; border-left:2px solid transparent;
+}
+.rail a .n{
+  font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-3);
+  letter-spacing:.06em;
+}
+.rail a:hover{background:var(--panel-2); color:var(--ink)}
+.rail a.on{background:var(--accent-soft); color:var(--accent); border-left-color:var(--accent); font-weight:500}
+.rail a.on .n{color:var(--accent)}
+.rail .note{
+  margin:1.4rem .55rem 0; padding-top:1rem; border-top:1px solid var(--line-2);
+  font-size:11.5px; line-height:1.5; color:var(--ink-3);
+}
+
+main{padding:1.5rem 1.5rem 5rem; max-width:1320px; min-width:0}
+.mod{display:none}
+.mod.on{display:block}
+.mod-head{margin:0 0 1.4rem; max-width:62ch}
+.mod-head h2{margin:0 0 .35rem; font-size:23px; font-weight:600; letter-spacing:-.02em; text-wrap:balance}
+.mod-head p{margin:0; color:var(--ink-2); font-size:13.5px}
+
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(345px,1fr)); gap:1rem; align-items:start}
+.grid.wide{grid-template-columns:repeat(auto-fill,minmax(560px,1fr))}
+
+/* ---- card: the isobar motif, a hairline broken by its label ---- */
+.card{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:1rem 1.05rem 1.05rem; box-shadow:var(--shadow);
+}
+.card.span2{grid-column:1/-1}
+.card-t{
+  display:flex; align-items:center; gap:.65rem; margin:0 0 .95rem;
+  font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500;
+  letter-spacing:.15em; text-transform:uppercase; color:var(--ink-2);
+}
+.card-t::before{content:''; width:12px; height:1px; background:var(--line); flex:none}
+.card-t::after{content:''; flex:1; height:1px; background:var(--line)}
+
+.fields{display:grid; grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); gap:.6rem}
+.fields.one{grid-template-columns:1fr}
+.f{display:flex; flex-direction:column; gap:.25rem; min-width:0}
+.fl{
+  font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:500;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+input[type=number],select{
+  width:100%; font-family:'IBM Plex Mono',monospace; font-size:14px;
+  padding:.42rem .5rem; color:var(--ink); background:var(--panel-2);
+  border:1px solid var(--line); border-radius:var(--radius);
+  font-variant-numeric:tabular-nums;
+}
+select{font-size:12.5px; cursor:pointer}
+input[type=number]{text-align:right}
+input:focus-visible,select:focus-visible,a:focus-visible,button:focus-visible{
+  outline:2px solid var(--accent); outline-offset:1px;
+}
+input[type=number]:hover,select:hover{border-color:var(--ink-3)}
+
+.out{margin-top:.9rem; border-top:1px solid var(--line-2); padding-top:.2rem}
+.out.cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); column-gap:1.9rem}
+.out.cols .r{border-bottom:1px solid var(--line-2)}
+.r{
+  display:flex; align-items:baseline; gap:.75rem; padding:.34rem 0;
+  border-bottom:1px solid var(--line-2);
+}
+.r:last-child{border-bottom:0}
+.r .k{
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em;
+  color:var(--ink-3); text-transform:uppercase; flex:1; min-width:0;
+}
+.r .v{
+  font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:500;
+  font-variant-numeric:tabular-nums; color:var(--ink); white-space:nowrap;
+}
+.r .u{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-3); width:3.6em; text-align:left; flex:none}
+.r.hero .v{font-size:21px; color:var(--accent)}
+.r.hero .k{color:var(--ink-2)}
+.r.dim .v{color:var(--ink-2); font-weight:400}
+
+.src{
+  margin:.85rem 0 0; padding-top:.6rem; border-top:1px solid var(--line-2);
+  font-size:11px; line-height:1.45; color:var(--ink-3);
+}
+.src b{color:var(--ink-2); font-weight:600}
+
+.flag{
+  margin-top:.7rem; padding:.5rem .6rem; border-radius:var(--radius);
+  background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn);
+  font-size:11.5px; line-height:1.45;
+}
+.flag.hide{display:none}
+.rule{
+  margin-top:.7rem; padding:.5rem .6rem; border-radius:var(--radius);
+  background:var(--panel-3); border-left:2px solid var(--accent);
+  font-size:11.5px; line-height:1.5; color:var(--ink-2);
+}
+.rule b{color:var(--ink)}
+
+table{width:100%; border-collapse:collapse; font-size:12.5px}
+.scroll{overflow-x:auto; margin-top:.3rem}
+.scroll.tight table{width:auto}
+.scroll.tight td.num,.scroll.tight th.num{padding-right:1.7rem}
+th{
+  font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:500;
+  letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);
+  text-align:left; padding:.4rem .55rem .4rem 0; border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+td{padding:.38rem .55rem .38rem 0; border-bottom:1px solid var(--line-2); vertical-align:baseline}
+td.num{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; text-align:right; padding-right:1.1rem; white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.hit{background:var(--accent-soft)}
+.hit td{color:var(--accent); font-weight:600}
+.chip{
+  display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:9.5px;
+  letter-spacing:.08em; text-transform:uppercase; padding:.12rem .34rem;
+  border:1px solid var(--line); border-radius:2px; color:var(--ink-3); white-space:nowrap;
+}
+.chip.a{border-color:var(--accent); color:var(--accent)}
+.chip.w{border-color:var(--warn-line); color:var(--warn); background:var(--warn-bg)}
+
+.prose{max-width:66ch; font-size:13.5px; color:var(--ink-2)}
+.prose h4{
+  font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink); margin:1.5rem 0 .5rem; font-weight:500;
+}
+.prose p{margin:0 0 .7rem}
+.prose ul{margin:0 0 .7rem; padding-left:1.1rem}
+.prose li{margin-bottom:.3rem}
+.prose a{color:var(--accent)}
+.prose code{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--panel-2); padding:.08rem .28rem; border-radius:2px}
+
+@media (max-width:840px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .rail{
+    position:sticky; top:53px; min-height:0; border-right:0;
+    border-bottom:1px solid var(--line); background:var(--panel); padding:.55rem .8rem;
+    overflow-x:auto; z-index:30;
+  }
+  .rail h2,.rail .note{display:none}
+  .rail nav{flex-direction:row; gap:.3rem}
+  .rail a{border-left:0; border-bottom:2px solid transparent; white-space:nowrap; padding:.4rem .6rem}
+  .rail a.on{border-left:0; border-bottom-color:var(--accent)}
+  .rail a .n{display:none}
+  main{padding:1.1rem .9rem 4rem}
+  .grid,.grid.wide{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:no-preference){
+  .r .v{transition:color .18s ease}
+}
+</style>
+</head>
+<body>
+
+
+<header class="top">
+  <div class="brand">
+    <h1>MeteoCalc</h1>
+    <span class="tag">Offline · every result cited</span>
+  </div>
+  <span class="pill" id="offline">Runs offline</span>
+  <button class="tbtn" id="themeBtn" type="button">Theme: auto</button>
+</header>
+
+<div class="app">
+  <aside class="rail">
+    <h2>Modules</h2>
+    <nav id="nav"></nav>
+    <p class="note">Every result carries the source it came from. Values outside a
+      formula's published range are flagged rather than silently returned.</p>
+  </aside>
+
+  <main>
+    <section class="mod" id="m-wind">
+      <div class="mod-head">
+        <h2>Wind &amp; tropical cyclone</h2>
+        <p>Speed units are computed from exact definitions, never chained through rounded factors.
+           Averaging-period conversions follow WMO/TD-No. 1555, which uses two different tables for
+           two different jobs — the tool keeps them apart.</p>
+      </div>
+      <div class="grid" id="g-wind"></div>
+    </section>
+
+    <section class="mod" id="m-moist">
+      <div class="mod-head">
+        <h2>Moisture &amp; comfort</h2>
+        <p>Saturation vapour pressure uses the WMO/CIMO Magnus pair, which inverts in closed form, so
+           dewpoint comes back algebraically with the same two constants and round-trips exactly. Water
+           and ice share a prefactor, so the two branches meet exactly at 0 °C.</p>
+      </div>
+      <div class="grid" id="g-moist"></div>
+    </section>
+
+    <section class="mod" id="m-press">
+      <div class="mod-head">
+        <h2>Pressure &amp; altitude</h2>
+        <p>Built on the ISO 2533 / ICAO standard atmosphere. Note that the ISA is frozen at
+           R* = 8314.32, not the modern CODATA value — using CODATA here would disagree with every
+           published ISA table.</p>
+      </div>
+      <div class="grid" id="g-press"></div>
+    </section>
+
+    <section class="mod" id="m-thermo">
+      <div class="mod-head">
+        <h2>Thermodynamics &amp; stability</h2>
+        <p>Bolton (1980) for equivalent potential temperature, Stull for the saturated adiabat, and
+           Romps (2017) for an exact analytic LCL — solved here with the lower branch of the Lambert
+           W function rather than approximated.</p>
+      </div>
+      <div class="grid" id="g-thermo"></div>
+    </section>
+
+    <section class="mod" id="m-ref">
+      <div class="mod-head">
+        <h2>Reference</h2>
+        <p>The lookup tables behind the calculators, the constants in use, and an honest list of what
+           could not be verified against a primary source.</p>
+      </div>
+      <div class="grid wide" id="g-ref"></div>
+      <div class="card span2" style="margin-top:1rem">
+        <h3 class="card-t"><span>Sources</span></h3>
+        <div class="prose">
+          <h4>Wind and tropical cyclone</h4>
+          <ul>
+            <li>Harper, B.A., J.D. Kepert and J.D. Ginger, 2010: <i>Guidelines for Converting Between
+              Various Wind Averaging Periods in Tropical Cyclone Conditions.</i> WMO/TD-No. 1555.
+              Tables 1.1 and 1.2, exposure classes, and the recommendation of 0.93 over the traditional 0.88.</li>
+            <li>WMO Typhoon Committee Operational Manual TCP-23 (2023), Appendix 1-A.</li>
+            <li>NHC, <i>Saffir-Simpson Hurricane Wind Scale</i> and Glossary — 1-minute sustained at 10 m.</li>
+            <li>JMA RSMC Tokyo advisory notes and typhoon classes — 10-minute mean.</li>
+            <li>PAGASA, <i>About Tropical Cyclones</i> and <i>Tropical Cyclone Wind Signals</i>
+              (thresholds effective 23 March 2022).</li>
+            <li>Atkinson, G.D. and C.R. Holliday, 1977: <i>Mon. Wea. Rev.</i> <b>105</b>, 421-427.</li>
+            <li>Knaff, J.A. and R.M. Zehr, 2007: <i>Wea. Forecasting</i> <b>22</b>, 71-88.</li>
+            <li>NIST SP 811 Appendix B.9 for the exact unit definitions.</li>
+          </ul>
+          <h4>Moisture and comfort</h4>
+          <ul>
+            <li>WMO-No. 8, Annex 4.B — saturation vapour pressure over water and over ice.</li>
+            <li>Alduchov, O.A. and R.E. Eskridge, 1996: <i>J. Appl. Meteor.</i> <b>35</b>, 601-609 (the ice pair WMO adopted).</li>
+            <li>Lawrence, M.G., 2005: <i>Bull. Amer. Meteor. Soc.</i> <b>86</b>, 225-233 (dewpoint rules of thumb, Espy).</li>
+            <li>Stull, R., 2011: <i>J. Appl. Meteor. Climatol.</i> <b>50</b>, 2267-2269 (wet-bulb approximation).</li>
+            <li>AMS Glossary, <i>Psychrometric formula</i>; FAO Irrigation &amp; Drainage Paper 56, Annex 3.</li>
+            <li>Rothfusz, L.P., 1990: NWS Technical Attachment SR 90-23 (heat index); NWS/WPC heat index pages.</li>
+            <li>NWS / Environment and Climate Change Canada, 2001 wind chill temperature index.</li>
+            <li>ECCC Climate Normals technical documentation (humidex); Steadman / BOM apparent temperature.</li>
+          </ul>
+          <h4>Pressure, altitude and thermodynamics</h4>
+          <ul>
+            <li>ISO 2533 / ICAO Standard Atmosphere; US Standard Atmosphere 1976.</li>
+            <li>WMO-No. 8, <i>Guide to Instruments and Methods of Observation</i>, Ch. 3 (MSLP reduction, eq. 3.2).</li>
+            <li>NWS WXCALC technical sheets (altimeter setting, pressure altitude, density altitude).</li>
+            <li>Bolton, D., 1980: <i>Mon. Wea. Rev.</i> <b>108</b>, 1046-1053 (eq. 10, 15, 43).</li>
+            <li>Romps, D.M., 2017: <i>J. Atmos. Sci.</i> <b>74</b>, 3891-3900 (exact LCL).</li>
+            <li>Stull, R., <i>Practical Meteorology</i>, Ch. 4 and Appendix B (saturated adiabat eq. 4.37b).</li>
+            <li>NOAA SPC and NWS stability index pages for the interpretation thresholds.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+/* =====================================================================
+   MetCalc core - meteorological calculation engine
+   Every constant traceable to a cited source. See REFS at bottom.
+   ===================================================================== */
+(function (root) {
+'use strict';
+
+/* ---------- Exact unit definitions (NIST SP811 App B.9) ---------- */
+const KT   = 1852/3600;      // knot -> m/s   (exact: nmi = 1852 m)
+const MPH  = 0.44704;        // mph  -> m/s   (exact: mile = 1609.344 m)
+const FTS  = 0.3048;         // ft/s -> m/s   (exact)
+const KMH  = 1/3.6;          // km/h -> m/s   (exact)
+
+/* ---------- ISA / ICAO (ISO 2533) ---------- */
+const P0    = 1013.25;       // hPa
+const T0K   = 288.15;        // K
+const RHO0  = 1.225;         // kg/m3
+const G0    = 9.80665;       // m/s2 (exact, CODATA)
+const R_ISA = 287.05287;     // J/kg/K = 8314.32/28.964420
+const LAPSE = 0.0065;        // K/gpm
+const H_TP  = 11000;         // gpm
+const T_TP  = 216.65;        // K
+const NEXP  = G0/(R_ISA*LAPSE);        // 5.2558797
+const R_E   = 6356766;       // m, ISO 2533 nominal earth radius
+
+/* ---------- Thermodynamic ---------- */
+const RD  = 287.05287;       // ISA basis: 8314.32/28.964420
+const MD  = 28.964420;       // g/mol, dry air (ISO 2533)
+const MV  = 18.01528;        // g/mol, water
+const EPS = MV/MD;           // 0.6219797
+const RV  = RD/EPS;          // derived, so eps = Rd/Rv holds exactly by construction
+const CPD = 1004.67;
+const KAPPA = 2/7;           // dry potential temperature
+const KAPPA_B = 0.2854;      // Bolton's working value
+
+const clamp = (v,a,b)=>Math.min(b,Math.max(a,v));
+const isNum = v=>typeof v==='number' && isFinite(v);
+
+/* =====================================================================
+   1. WIND
+   ===================================================================== */
+
+/* --- 1.1 speed units. Base unit is m/s; convert via exact factors --- */
+const SPEED = {
+  ms:  {to:1,        label:'m/s'},
+  kt:  {to:KT,       label:'kt'},
+  kmh: {to:KMH,      label:'km/h'},
+  mph: {to:MPH,      label:'mph'},
+  fts: {to:FTS,      label:'ft/s'}
+};
+function speedTo(v, from, to){
+  if(!isNum(v)) return NaN;
+  return v*SPEED[from].to/SPEED[to].to;   // never chain rounded factors
+}
+
+/* --- 1.2 Beaufort. WMO table is the definition; the cube-root
+       relation v = 0.836 B^1.5 is only an approximation. --- */
+const BEAUFORT = [
+  {f:0,  loKt:0,  hiKt:0.99, name:'Calm',           sea:'Sea like a mirror'},
+  {f:1,  loKt:1,  hiKt:3,    name:'Light air',      sea:'Ripples, no foam crests'},
+  {f:2,  loKt:4,  hiKt:6,    name:'Light breeze',   sea:'Small wavelets, glassy crests'},
+  {f:3,  loKt:7,  hiKt:10,   name:'Gentle breeze',  sea:'Large wavelets, scattered whitecaps'},
+  {f:4,  loKt:11, hiKt:16,   name:'Moderate breeze',sea:'Small waves, frequent whitecaps'},
+  {f:5,  loKt:17, hiKt:21,   name:'Fresh breeze',   sea:'Moderate waves, many whitecaps'},
+  {f:6,  loKt:22, hiKt:27,   name:'Strong breeze',  sea:'Large waves, extensive foam crests'},
+  {f:7,  loKt:28, hiKt:33,   name:'Near gale',      sea:'Sea heaps up, foam blown in streaks'},
+  {f:8,  loKt:34, hiKt:40,   name:'Gale',           sea:'Moderately high waves, spindrift'},
+  {f:9,  loKt:41, hiKt:47,   name:'Strong gale',    sea:'High waves, dense foam, spray'},
+  {f:10, loKt:48, hiKt:55,   name:'Storm',          sea:'Very high waves, sea white, visibility affected'},
+  {f:11, loKt:56, hiKt:63,   name:'Violent storm',  sea:'Exceptionally high waves, sea covered in foam'},
+  {f:12, loKt:64, hiKt:Infinity, name:'Hurricane',  sea:'Air filled with foam and spray'}
+];
+function beaufort(vKt){
+  if(!isNum(vKt)) return null;
+  for(let i=BEAUFORT.length-1;i>=0;i--) if(vKt>=BEAUFORT[i].loKt) return BEAUFORT[i];
+  return BEAUFORT[0];
+}
+function beaufortApprox(vMs){ return Math.pow(vMs/0.836, 2/3); }
+
+/* --- 1.3 WMO/TD-1555 Table 1.2 : agency Vmax averaging conversion.
+       V(10-min) = K * V(1-min).  THIS is the one for storm intensity. --- */
+const EXPOSURES = ['at-sea','off-sea','off-land','in-land'];
+const EXPOSURE_LABEL = {
+  'at-sea':'At-Sea (>20 km offshore)',
+  'off-sea':'Off-Sea (onshore wind at coast)',
+  'off-land':'Off-Land (offshore wind at coast)',
+  'in-land':'In-Land (roughly open terrain)'
+};
+const K_VMAX = {'at-sea':0.93,'off-sea':0.90,'off-land':0.87,'in-land':0.84};
+const K_LEGACY = 0.88;   // "traditional" value, still used by JTWC (1/0.88 = 1.14)
+
+function vmax1to10(v1, exposure){ return v1 * K_VMAX[exposure]; }
+function vmax10to1(v10, exposure){ return v10 / K_VMAX[exposure]; }
+
+/* --- 1.4 WMO/TD-1555 Table 1.1 : gust factors G(tau, T0).
+       Converts a MEAN wind of period T0 into the expected peak
+       tau-second GUST within it. Must NOT be used mean->mean. --- */
+const GUST = {
+  3600:{3:[1.30,1.45,1.60,1.75],60:[1.11,1.17,1.22,1.28],120:[1.07,1.11,1.15,1.19],180:[1.06,1.09,1.12,1.15],600:[1.03,1.05,1.06,1.08]},
+  600: {3:[1.23,1.38,1.52,1.66],60:[1.05,1.11,1.16,1.21],120:[1.02,1.05,1.09,1.12],180:[1.00,1.03,1.06,1.09],600:[1.00,1.00,1.00,1.00]},
+  180: {3:[1.17,1.31,1.44,1.58],60:[1.00,1.05,1.10,1.15],120:[1.00,1.00,1.04,1.07],180:[1.00,1.00,1.00,1.00]},
+  120: {3:[1.15,1.28,1.42,1.55],60:[1.00,1.03,1.08,1.13],120:[1.00,1.00,1.00,1.00]},
+  60:  {3:[1.11,1.23,1.36,1.49],60:[1.00,1.00,1.00,1.00]}
+};
+function gustFactor(tau, T0, exposure){
+  const row = GUST[T0]; if(!row) return NaN;
+  const col = row[tau]; if(!col) return NaN;
+  const i = EXPOSURES.indexOf(exposure); if(i < 0) return NaN;
+  return col[i];
+}
+
+/* --- 1.5 TC intensity scales. Each carries its NATIVE averaging period. --- */
+const TC_SCALES = [
+  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific',
+    bands:[ {lo:0,   name:'Tropical Depression'}, {lo:34, name:'Tropical Storm'},
+            {lo:64,  name:'Category 1'},          {lo:83, name:'Category 2'},
+            {lo:96,  name:'Category 3 (major)'},  {lo:113,name:'Category 4 (major)'},
+            {lo:137, name:'Category 5 (major)'} ] },
+  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific',
+    bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
+            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
+            {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
+  { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
+    bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
+            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
+            {lo:100,name:'Super Typhoon'} ] },
+  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region',
+    bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
+            {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
+            {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
+  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean',
+    bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
+            {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},
+            {lo:48, name:'Severe Cyclonic Storm'}, {lo:64, name:'Very Severe Cyclonic Storm'},
+            {lo:90, name:'Extremely Severe Cyclonic Storm'}, {lo:120,name:'Super Cyclonic Storm'} ] }
+];
+function classify(vKt, bands){
+  let out = bands[0];
+  for(const b of bands) if(vKt >= b.lo) out = b;
+  return out;
+}
+/* Convert an input wind of a given averaging period into each scale's
+   native period using Table 1.2, then classify. */
+function tcClassifyAll(vKt, inputAvg, exposure){
+  const K = K_VMAX[exposure];
+  return TC_SCALES.map(s=>{
+    let v = vKt, note = null;
+    if(inputAvg !== s.avg){
+      if(inputAvg===60  && s.avg===600){ v = vKt*K; note='x'+K.toFixed(2); }
+      else if(inputAvg===600 && s.avg===60){ v = vKt/K; note='/'+K.toFixed(2); }
+      else if(inputAvg===180 || s.avg===180){ note='no WMO factor'; }
+    }
+    return {scale:s, v:v, band:classify(v,s.bands), note:note};
+  });
+}
+
+/* --- 1.6 Pressure-wind relationships --- */
+// Atkinson & Holliday (1977), western North Pacific, 1-min sustained.
+function ah77WindFromP(pc){ return pc>=1010 ? 0 : 6.70*Math.pow(1010-pc, 0.644); }   // kt
+function ah77PFromWind(vKt){ return vKt<=0 ? 1010 : 1010 - Math.pow(vKt/6.70, 1/0.644); }
+
+// Knaff & Zehr (2007) eq.7, N Atl / E-C Pac, 1-min sustained, V in kt.
+function kz07PFromWind(vMax, penv, lat, c, S){
+  const vsrm = vMax - 1.5*Math.pow(Math.max(c,0), 0.63);
+  const dp = 23.286 - 0.483*vsrm - Math.pow(vsrm/24.254,2) - 12.587*S - 0.483*Math.abs(lat);
+  return penv + dp;
+}
+// Invert eq.7 numerically (monotonic) rather than trusting the printed eq.8.
+function kz07WindFromP(pc, penv, lat, c, S){
+  let lo=0, hi=250;
+  // Outside the bracket there is no solution; returning an endpoint would look
+  // like an answer.
+  if(pc > kz07PFromWind(lo,penv,lat,c,S) || pc < kz07PFromWind(hi,penv,lat,c,S)) return NaN;
+  for(let i=0;i<200;i++){
+    const mid=(lo+hi)/2;
+    if(kz07PFromWind(mid,penv,lat,c,S) > pc) lo=mid; else hi=mid;
+  }
+  return (lo+hi)/2;
+}
+
+/* --- 1.7 Vector components. Meteorological direction = FROM. --- */
+function uvFromSpeedDir(v, dirDeg){
+  const r = dirDeg*Math.PI/180;
+  return {u: -v*Math.sin(r), v: -v*Math.cos(r)};
+}
+function speedDirFromUV(u, v){
+  const spd = Math.hypot(u,v);
+  let dir = Math.atan2(-u,-v)*180/Math.PI;
+  dir = ((dir%360)+360)%360;
+  if(u===0 && v===0) dir = 0;
+  return {speed:spd, dir:dir};
+}
+
+/* --- 1.8 Height adjustment to the 10 m reference --- */
+const Z0 = {  // Davenport-Wieringa, WMO/TD-1555 Table 2.1 (mid-range values)
+  'sea':0.0002,'smooth':0.005,'open':0.03,'roughly-open':0.10,
+  'rough':0.25,'very-rough':0.5,'closed':1.0
+};
+function logProfile(uz, z, z0, zTarget){
+  if(z<=z0 || zTarget<=z0) return NaN;
+  return uz*Math.log(zTarget/z0)/Math.log(z/z0);
+}
+function powerLaw(uz, z, zTarget, alpha){ return uz*Math.pow(zTarget/z, alpha); }
+
+/* --- 1.9 Wind power density --- */
+function windPowerDensity(v, rho){ return 0.5*rho*Math.pow(v,3); }
+
+/* =====================================================================
+   2. MOISTURE
+   ===================================================================== */
+
+/* --- 2.1 Saturation vapour pressure.
+       Alduchov & Eskridge (1996) AERK over water: closed-form invertible,
+       max error 0.384% over -40..+50 C. AERKi over ice (= the WMO ice pair). --- */
+const AW = 6.112, BW = 17.62, CW = 243.12;   // WMO/CIMO over water, -45..+60 C
+const AI = 6.112, BI = 22.46, CI = 272.62;  // WMO/CIMO over ice,  -65..0.01 C
+// One basis: identical prefactors, so e_s over water and over ice coincide at 0 C.
+function esWater(t){ return AW*Math.exp(BW*t/(CW+t)); }        // hPa, t in C
+function esIce(t){   return AI*Math.exp(BI*t/(CI+t)); }
+// Bolton (1980) eq.10 - used ONLY inside Bolton's own thermodynamics
+function esBolton(t){ return 6.112*Math.exp(17.67*t/(t+243.5)); }
+
+/* --- 2.2 Dewpoint: exact algebraic inversion (prefactor cancels) --- */
+function dewpointFromRH(t, rh){
+  if(rh<=0) return NaN;
+  const g = Math.log(rh/100) + BW*t/(CW+t);
+  return CW*g/(BW-g);
+}
+function rhFromDewpoint(t, td){
+  return 100*Math.exp(BW*td/(CW+td) - BW*t/(CW+t));
+}
+function frostpointFromRHi(t, rhi){
+  const g = Math.log(rhi/100) + BI*t/(CI+t);
+  return CI*g/(BI-g);
+}
+// RH is reported wrt WATER even below 0 C. Convert before using the ice branch.
+function rhIceFromRhWater(t, rhw){ return rhw*esWater(t)/esIce(t); }
+function dewpointSimple(t, rh){ return t - (100-rh)/5; }   // Lawrence 2005 rule of thumb
+
+/* --- 2.3 Moisture variables --- */
+function mixingRatio(e, p){ return (p<=e || e<0) ? NaN : EPS*e/(p-e); }              // kg/kg
+function specificHumidity(e, p){ return (p<=e || e<0) ? NaN : EPS*e/(p-(1-EPS)*e); } // kg/kg
+function vapourPressureFromW(w, p){ return p*w/(EPS+w); }
+function absoluteHumidity(e, tK){ return 1e5*e/(RV*tK); }      // g/m3 (e in hPa)
+function virtualTemp(tK, w){ return tK*(1+w/EPS)/(1+w); }      // exact form
+
+/* --- 2.4 Wet-bulb --- */
+// Stull (2011): RH 5-99%, T -20..+50 C, sea level ONLY. MAE < 0.3 C.
+function wetBulbStull(t, rh){
+  return t*Math.atan(0.151977*Math.sqrt(rh+8.313659))
+       + Math.atan(t+rh) - Math.atan(rh-1.676331)
+       + 0.00391838*Math.pow(rh,1.5)*Math.atan(0.023101*rh)
+       - 4.686035;
+}
+// Exact: bisect the psychrometric equation e = es(Tw) - A p (1+0.00115 Tw)(T-Tw)
+function wetBulbPsychro(t, rh, p){
+  const e = (rh/100)*esWater(t);
+  // One branch across the whole bracket, so f stays monotonic and the root is
+  // unique. Switching A and e_s on the *iterate* puts a step at Tw = 0 that
+  // creates a second root and makes the answer depend on the starting bracket.
+  const solve = (A, esf) => {
+    const f = tw => esf(tw) - A*p*(1+0.00115*tw)*(t-tw) - e;
+    let lo = -100, hi = t;
+    if(!(f(lo) < 0) || !(f(hi) >= 0)) return NaN;   // no bracketed root
+    for(let i=0;i<200;i++){ const m=(lo+hi)/2; if(f(m)<0) lo=m; else hi=m; }
+    return (lo+hi)/2;
+  };
+  return solve(6.60e-4, esWater);   // liquid branch throughout (supercooled below 0)
+}
+// The ice-covered bulb is a genuinely different equilibrium, not a continuation
+// of the same curve, so it is a separate quantity rather than a hidden branch
+// switch inside the solver above.
+function iceBulbPsychro(t, rh, p){
+  const e = (rh/100)*esWater(t);
+  const f = tw => esIce(tw) - 5.82e-4*p*(1+0.00115*tw)*(t-tw) - e;
+  let lo=-100, hi=t;
+  if(!(f(lo) < 0) || !(f(hi) >= 0)) return NaN;
+  for(let i=0;i<200;i++){ const m=(lo+hi)/2; if(f(m)<0) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+
+/* --- 2.5 Heat index. NWS four-step procedure, defined in degF. --- */
+function heatIndexF(tF, rh){
+  const simple = 0.5*(tF + 61.0 + (tF-68.0)*1.2 + rh*0.094);
+  if((simple+tF)/2 < 80) return {hi:simple, branch:'simple'};
+  let hi = -42.379 + 2.04901523*tF + 10.14333127*rh
+         - 0.22475541*tF*rh - 0.00683783*tF*tF - 0.05481717*rh*rh
+         + 0.00122874*tF*tF*rh + 0.00085282*tF*rh*rh
+         - 0.00000199*tF*tF*rh*rh;
+  let branch='rothfusz';
+  if(rh<13 && tF>=80 && tF<=112){
+    hi -= ((13-rh)/4)*Math.sqrt((17-Math.abs(tF-95))/17); branch='rothfusz+dry adj';
+  } else if(rh>85 && tF>=80 && tF<=87){
+    hi += ((rh-85)/10)*((87-tF)/5); branch='rothfusz+humid adj';
+  }
+  return {hi:hi, branch:branch};
+}
+
+/* --- 2.6 Wind chill (2001 NWS / ECCC), metric form, V at 10 m in km/h --- */
+function windChillC(t, vKmh){
+  if(!(vKmh >= 0)) return NaN;
+  if(vKmh < 5) return t + ((-1.59+0.1345*t)/5)*vKmh;   // ECCC low-wind fallback
+  const p = Math.pow(vKmh, 0.16);
+  return 13.12 + 0.6215*t - 11.37*p + 0.3965*t*p;
+}
+
+/* --- 2.7 Humidex (ECCC; Masterton & Richardson 1979) --- */
+function humidex(t, td){
+  const e = 6.11*Math.exp(5417.7530*(1/273.15 - 1/(td+273.15)));
+  return t + 0.5555*(e-10.0);
+}
+
+/* --- 2.8 Apparent temperature, BOM shade version (Steadman) --- */
+function apparentTempBOM(t, rh, vMs){
+  const e = (rh/100)*6.105*Math.exp(17.27*t/(237.7+t));
+  return t + 0.33*e - 0.70*vMs - 4.00;
+}
+
+/* --- 2.9 Simplified WBGT (BOM approximation; no radiation or wind input) --- */
+function wbgtSimple(t, rh){
+  const e = (rh/100)*esWater(t);
+  return 0.567*t + 0.393*e + 3.94;
+}
+
+/* =====================================================================
+   3. PRESSURE & ALTITUDE
+   ===================================================================== */
+
+/* --- 3.1 Pressure units. Base hPa. inHg/mmHg exact from conventional
+       mercury density 13595.1 kg/m3 x g0 x length. --- */
+const INHG = 13595.1*G0*0.0254/100;   // 33.86388640341 hPa
+const MMHG = 13595.1*G0*0.001/100;    // 1.33322387415 hPa
+const PRESS = {
+  hPa:{to:1}, mb:{to:1}, Pa:{to:0.01}, kPa:{to:10},
+  inHg:{to:INHG}, mmHg:{to:MMHG}, Torr:{to:1013.25/760},
+  psi:{to:68.94757293168361}, atm:{to:1013.25}
+};
+function pressTo(v, from, to){ return v*PRESS[from].to/PRESS[to].to; }
+
+/* --- 3.2 ISA state at geopotential height H (gpm) --- */
+function isa(H){
+  let T,p;
+  if(H <= H_TP){
+    T = T0K - LAPSE*H;
+    p = P0*Math.pow(T/T0K, NEXP);
+  } else if(H <= 20000){
+    T = T_TP;
+    const pTP = P0*Math.pow(T_TP/T0K, NEXP);
+    p = pTP*Math.exp(-G0*(H-H_TP)/(R_ISA*T_TP));
+  } else { return {T:NaN,p:NaN,rho:NaN}; }
+  return {T:T, p:p, rho:100*p/(R_ISA*T)};
+}
+
+/* --- 3.3 Geopotential <-> geometric height (ISO 2533) --- */
+function geometricToGeopotential(z){ return R_E*z/(R_E+z); }
+function geopotentialToGeometric(H){ return R_E*H/(R_E-H); }
+
+/* --- 3.4 Station pressure -> MSL (QFF). WMO-No.8 eq. 3.2 exponential form.
+       Denominator IS the mean virtual temperature of the fictitious column. --- */
+function qff(ps, Hp, tC, esHPa){
+  const Tmv = (tC+273.15) + 0.0065*Hp/2 + (esHPa||0)*0.12;
+  return ps*Math.exp(G0*Hp/(287.05*Tmv));
+}
+function qffTmv(Hp, tC, esHPa){ return (tC+273.15) + 0.0065*Hp/2 + (esHPa||0)*0.12; }
+
+/* --- 3.5 QNH. ISA reduction (clean, invertible) + NWS/FAA operational form --- */
+function qnhISA(ps, hM){ return ps/Math.pow(1 - LAPSE*hM/T0K, NEXP); }
+function stationFromQnhISA(qnh, hM){ return qnh*Math.pow(1 - LAPSE*hM/T0K, NEXP); }
+function qnhNWS(ps, hM){
+  const k = 0.190284;
+  return (ps-0.3)*Math.pow(1 + (Math.pow(1013.25,k)*0.0065/288)*hM/Math.pow(ps-0.3,k), 1/k);
+}
+
+/* --- 3.6 Pressure altitude & density altitude --- */
+function pressureAltitude(p){ return (T0K/LAPSE)*(1 - Math.pow(p/P0, 1/NEXP)); }  // m
+function densityAltitude(p, tC, td){
+  const e   = isNum(td) ? esWater(td) : 0;
+  const tK  = tC+273.15;
+  const Tv  = tK/(1 - (e/p)*(1-EPS));
+  const rho = 100*p/(RD*Tv);
+  return {da:(T0K/LAPSE)*(1 - Math.pow(rho/RHO0, 1/(NEXP-1))), rho:rho, Tv:Tv};
+}
+
+/* --- 3.7 Hypsometric --- */
+function thickness(p1, p2, TvMean){ return (RD*TvMean/G0)*Math.log(p1/p2); }
+function meanTvFromThickness(p1, p2, dz){ return dz*G0/(RD*Math.log(p1/p2)); }
+
+/* --- 3.8 Moist air density --- */
+function airDensity(p, tC, e){
+  const tK = tC+273.15;
+  return 100*p/(RD*tK)*(1 - 0.378*e/p);
+}
+
+/* =====================================================================
+   4. THERMODYNAMICS & STABILITY
+   ===================================================================== */
+
+function potentialTemp(tK, p){ return tK*Math.pow(1000/p, KAPPA); }
+function invPotentialTemp(thK, p){ return thK*Math.pow(p/1000, KAPPA); }
+
+/* Bolton (1980) eq.15 - temperature at the LCL */
+function boltonTL(tK, eHPa){
+  return 2840/(3.5*Math.log(tK) - Math.log(eHPa) - 4.805) + 55;
+}
+/* Bolton (1980) eq.43 - equivalent potential temperature. Max error 0.3 K. */
+function thetaE(tK, p, rGkg){
+  const e  = vapourPressureFromW(rGkg/1000, p);
+  const TL = boltonTL(tK, e);
+  const th = tK*Math.pow(1000/p, KAPPA_B*(1 - 0.28e-3*rGkg));
+  return th*Math.exp((3.376/TL - 0.00254)*rGkg*(1 + 0.81e-3*rGkg));
+}
+
+/* Lapse rates */
+function dryLapse(){ return 1000*G0/CPD; }   // K/km
+/* Stull eq. 4.37b saturated adiabatic lapse rate */
+function moistLapse(tK, p){
+  const es = esWater(tK-273.15);
+  const rs = EPS*es/(p-es);
+  const a = 8711, b = 1.35e7, Gd = 9.8;
+  return Gd*(1 + a*rs/tK)/(1 + b*rs/(tK*tK));   // K/km
+}
+
+/* Moist adiabat in pressure coordinates, RK4. dT/dp per MetPy/Bakhshaii. */
+function moistLapseDTDP(tK, p){
+  const es = esWater(tK-273.15);
+  const rs = EPS*es/Math.max(p-es, 1e-6);
+  const Lv = 3337118.5 - 3642.8583*tK + 2.1263947*tK*tK;   // Smithsonian poly
+  return (RD*tK + Lv*rs)/(p*(CPD + Lv*Lv*rs*EPS/(RD*tK*tK)));
+}
+function liftMoist(tK, pFrom, pTo, steps){
+  steps = steps||120;
+  const h = (pTo-pFrom)/steps;
+  let T = tK, p = pFrom;
+  for(let i=0;i<steps;i++){
+    const k1 = moistLapseDTDP(T, p);
+    const k2 = moistLapseDTDP(T+h*k1/2, p+h/2);
+    const k3 = moistLapseDTDP(T+h*k2/2, p+h/2);
+    const k4 = moistLapseDTDP(T+h*k3,   p+h);
+    T += h*(k1+2*k2+2*k3+k4)/6; p += h;
+  }
+  return T;
+}
+
+/* LCL */
+function lclEspy(t, td){ return 125*(t-td); }                       // m
+function lclStullPressure(p, tK, tdK){ return p*Math.pow(1-1.225*(tK-tdK)/tK, 3.5); }
+
+/* Lambert W, lower (-1) branch, for x in [-1/e, 0) */
+function lambertWm1(x){
+  if(!(x < 0) || x < -1/Math.E) return NaN;   // also rejects NaN
+  let w = Math.log(-x) - Math.log(-Math.log(-x));       // asymptotic guess
+  if(!isFinite(w)) w = -2;
+  for(let i=0;i<80;i++){
+    const ew = Math.exp(w), f = w*ew - x;
+    const d  = ew*(w+1) - (w+2)*f/(2*w+2);
+    const step = f/d;
+    if(!isFinite(step)) break;
+    w -= step;
+    if(Math.abs(step) < 1e-14*Math.max(1,Math.abs(w))) break;
+  }
+  return w;
+}
+/* Romps (2017) exact analytic LCL. p in Pa, T in K, rh as fraction. */
+const RMP = {Ttrip:273.16, ptrip:611.65, E0v:2.3740e6, E0s:0.3337e6, g:9.81,
+             rgasa:287.04, rgasv:461, cva:719, cvv:1418, cvl:4119, cvs:1861};
+RMP.cpa = RMP.cva + RMP.rgasa;   // 1006.04
+RMP.cpv = RMP.cvv + RMP.rgasv;   // 1879
+function pvstarl(T){
+  return RMP.ptrip*Math.pow(T/RMP.Ttrip, (RMP.cpv-RMP.cvl)/RMP.rgasv)
+       * Math.exp((RMP.E0v-(RMP.cvv-RMP.cvl)*RMP.Ttrip)/RMP.rgasv*(1/RMP.Ttrip - 1/T));
+}
+function lclRomps(pPa, tK, rhFrac){
+  const pv  = rhFrac*pvstarl(tK);
+  if(pv<=0) return NaN;
+  const qv  = RMP.rgasa*pv/(RMP.rgasv*pPa + (RMP.rgasa-RMP.rgasv)*pv);
+  const rgm = (1-qv)*RMP.rgasa + qv*RMP.rgasv;
+  const cpm = (1-qv)*RMP.cpa   + qv*RMP.cpv;
+  const aL  = -(RMP.cpv-RMP.cvl)/RMP.rgasv + cpm/rgm;
+  const bL  = -(RMP.E0v-(RMP.cvv-RMP.cvl)*RMP.Ttrip)/(RMP.rgasv*tK);
+  const cL  = pv/pvstarl(tK)*Math.exp(-(RMP.E0v-(RMP.cvv-RMP.cvl)*RMP.Ttrip)/(RMP.rgasv*tK));
+  const W   = lambertWm1(bL/aL*Math.pow(cL, 1/aL));
+  return cpm*tK/RMP.g*(1 - bL/(aL*W));
+}
+
+/* Stability indices */
+function kIndex(t850, td850, t700, td700, t500){
+  return (t850 - t500) + td850 - (t700 - td700);
+}
+function totalTotals(t850, td850, t500){ return t850 + td850 - 2*t500; }
+function verticalTotals(t850, t500){ return t850 - t500; }
+function crossTotals(td850, t500){ return td850 - t500; }
+
+/* Lift a parcel from (p, T, Td) to a target pressure: dry to LCL then moist. */
+function liftParcelTo(p, tC, tdC, pTarget){
+  const tK = tC+273.15, tdK = tdC+273.15;
+  const pLCL = lclStullPressure(p, tK, tdK);
+  if(pTarget >= pLCL){                       // still below the LCL: dry adiabat
+    return invPotentialTemp(potentialTemp(tK,p), pTarget) - 273.15;
+  }
+  const tLCL = invPotentialTemp(potentialTemp(tK,p), pLCL);
+  return liftMoist(tLCL, pLCL, pTarget) - 273.15;
+}
+function liftedIndex(pSfc, tSfc, tdSfc, t500){
+  return t500 - liftParcelTo(pSfc, tSfc, tdSfc, 500);
+}
+function showalter(t850, td850, t500){
+  return t500 - liftParcelTo(850, t850, td850, 500);
+}
+function sweat(td850, tt, f850, f500, dir850, dir500){
+  const a = 12*Math.max(td850, 0);
+  const b = tt < 49 ? 0 : 20*(tt-49);
+  const c = 2*f850;
+  const d = f500;
+  let e = 0;
+  const veer = dir500 - dir850;
+  if(dir850>=130 && dir850<=250 && dir500>=210 && dir500<=310 &&
+     veer>0 && f850>=15 && f500>=15){
+    e = 125*(Math.sin(veer*Math.PI/180) + 0.2);
+  }
+  return a+b+c+d+e;
+}
+function bulkRichardson(cape, uShear){ return cape/(0.5*uShear*uShear); }
+
+const API = {
+  MD,MV,
+  KT,MPH,FTS,KMH,P0,T0K,RHO0,G0,R_ISA,LAPSE,NEXP,R_E,RD,RV,EPS,CPD,KAPPA,KAPPA_B,INHG,MMHG,
+  SPEED,speedTo,BEAUFORT,beaufort,beaufortApprox,
+  EXPOSURES,EXPOSURE_LABEL,K_VMAX,K_LEGACY,vmax1to10,vmax10to1,GUST,gustFactor,
+  TC_SCALES,classify,tcClassifyAll,
+  ah77WindFromP,ah77PFromWind,kz07PFromWind,kz07WindFromP,
+  uvFromSpeedDir,speedDirFromUV,Z0,logProfile,powerLaw,windPowerDensity,
+  esWater,esIce,esBolton,dewpointFromRH,rhFromDewpoint,frostpointFromRHi,
+  rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
+  absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
+  humidex,apparentTempBOM,wbgtSimple,
+  PRESS,pressTo,isa,geometricToGeopotential,geopotentialToGeometric,
+  qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
+  thickness,meanTvFromThickness,airDensity,
+  potentialTemp,invPotentialTemp,boltonTL,thetaE,dryLapse,moistLapse,
+  moistLapseDTDP,liftMoist,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
+  kIndex,totalTotals,verticalTotals,crossTotals,liftParcelTo,liftedIndex,
+  showalter,sweat,bulkRichardson
+};
+if(typeof module!=='undefined' && module.exports) module.exports = API;
+root.MET = API;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+</script>
+<script>
+/* ================= MeteoCalc UI ================= */
+(function(){
+'use strict';
+const M = window.MET;
+const $ = s => document.querySelector(s);
+const N = (x,d)=> (typeof x!=='number'||!isFinite(x)) ? '—'
+                 : (d===0 ? Math.round(x).toString() : x.toFixed(d==null?2:d));
+const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+const MODULES = [
+  {id:'wind',   label:'Wind &amp; tropical cyclone'},
+  {id:'moist',  label:'Moisture &amp; comfort'},
+  {id:'press',  label:'Pressure &amp; altitude'},
+  {id:'thermo', label:'Thermodynamics'},
+  {id:'ref',    label:'Reference'}
+];
+const SPEED_OPTS = [['kt','knots'],['kmh','km/h'],['ms','m/s'],['mph','mph'],['fts','ft/s']];
+const EXP_OPTS   = M.EXPOSURES.map(e=>[e, M.EXPOSURE_LABEL[e]]);
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem('meteocalc.'+k); return v==null?d:v; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('meteocalc.'+k, v); }catch(e){} }
+};
+
+/* ---- card factory ---- */
+let uid = 0;
+function card(mod, spec){
+  const host = document.getElementById('g-'+mod);
+  const box  = document.createElement('section');
+  box.className = 'card' + (spec.span ? ' span2' : '');
+  const ns = 'c'+(++uid)+'_';
+  const ids = {};
+
+  let html = '<h3 class="card-t"><span>'+spec.title+'</span></h3>';
+  if(spec.fields && spec.fields.length){
+    html += '<div class="fields'+(spec.fields.length===1?' one':'')+'">';
+    for(const f of spec.fields){
+      const id = ns+f.id; ids[f.id] = id;
+      html += '<div class="f"><label class="fl" for="'+id+'">'+f.label+'</label>';
+      if(f.type==='sel'){
+        html += '<select id="'+id+'">'+f.opts.map(o=>
+          '<option value="'+esc(o[0])+'"'+(o[0]===f.val?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
+      } else {
+        html += '<input type="number" id="'+id+'" value="'+f.val+'"'
+             + (f.step!=null?' step="'+f.step+'"':' step="any"')
+             + (f.min!=null?' min="'+f.min+'"':'')
+             + (f.max!=null?' max="'+f.max+'"':'') + '>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  if(spec.rule) html += '<div class="rule">'+spec.rule+'</div>';
+  html += '<div class="out'+(spec.cols?' cols':'')+'" id="'+ns+'out"></div>';
+  html += '<div class="flag hide" id="'+ns+'flag"></div>';
+  if(spec.src) html += '<p class="src">'+spec.src+'</p>';
+  box.innerHTML = html;
+  host.appendChild(box);
+
+  const out = document.getElementById(ns+'out');
+  const flg = document.getElementById(ns+'flag');
+  function read(){
+    const v = {};
+    for(const f of (spec.fields||[])){
+      const e = document.getElementById(ids[f.id]);
+      v[f.id] = (f.type==='sel') ? e.value : parseFloat(e.value);
+    }
+    return v;
+  }
+  function run(){
+    let res;
+    try{ res = spec.compute(read()); }
+    catch(err){ res = {rows:[{k:'error', v:'—'}]}; }
+    if(res.html!=null){ out.innerHTML = res.html; }
+    else {
+      out.innerHTML = (res.rows||[]).map(r=>
+        '<div class="r'+(r.cls?' '+r.cls:'')+'"><span class="k">'+r.k+'</span>'
+        + '<span class="v">'+r.v+'</span><span class="u">'+(r.u||'')+'</span></div>').join('');
+    }
+    if(res.flag){ flg.innerHTML = res.flag; flg.classList.remove('hide'); }
+    else flg.classList.add('hide');
+  }
+  for(const f of (spec.fields||[])){
+    const e = document.getElementById(ids[f.id]);
+    e.addEventListener('input', run);
+    e.addEventListener('change', run);
+  }
+  run();
+}
+const rowsOf = a => a.map(r=>({k:r[0], v:r[1], u:r[2]||'', cls:r[3]||''}));
+
+/* =================================================================
+   WIND
+   ================================================================= */
+
+card('wind', {
+  title:'TC maximum wind — averaging period',
+  span:true,
+  fields:[
+    {id:'v',  label:'V<sub>max</sub>', type:'num', val:100, step:1},
+    {id:'u',  label:'Unit',            type:'sel', val:'kt', opts:SPEED_OPTS},
+    {id:'fr', label:'Given as',        type:'sel', val:'60',
+      opts:[['60','1-minute sustained (NHC, JTWC)'],['600','10-minute sustained (JMA, PAGASA, BOM)']]},
+    {id:'ex', label:'Exposure',        type:'sel', val:'at-sea', opts:EXP_OPTS}
+  ],
+  rule:'<b>This uses WMO Table 1.2</b>, which converts between <i>agency estimates of peak storm intensity</i>. It is not the reciprocal of the gust-factor table — at sea, Table 1.2 gives 0.93 while 1/G(60,600) would give 0.952. For a point wind observation, use the gust-factor card instead.',
+  compute(v){
+    const K  = M.K_VMAX[v.ex];
+    const ms = M.speedTo(v.v, v.u, 'ms');
+    const one = v.fr==='60' ? ms : ms/K;
+    const ten = v.fr==='60' ? ms*K : ms;
+    const leg = v.fr==='60' ? ms*M.K_LEGACY : ms/M.K_LEGACY;
+    const F = (x,unit)=>N(M.speedTo(x,'ms',unit), unit==='ms'?2:1);
+    return {
+      html:
+        '<div class="r hero"><span class="k">1-minute sustained</span><span class="v">'+F(one,v.u)+'</span><span class="u">'+M.SPEED[v.u].label+'</span></div>'+
+        '<div class="r hero"><span class="k">10-minute sustained</span><span class="v">'+F(ten,v.u)+'</span><span class="u">'+M.SPEED[v.u].label+'</span></div>'+
+        '<div class="scroll tight"><table><thead><tr><th>Averaging</th><th class="num">kt</th><th class="num">km/h</th><th class="num">m/s</th><th class="num">mph</th></tr></thead><tbody>'+
+        [['1-minute',one],['10-minute',ten]].map(r=>
+          '<tr><td>'+r[0]+'</td><td class="num">'+F(r[1],'kt')+'</td><td class="num">'+F(r[1],'kmh')+
+          '</td><td class="num">'+F(r[1],'ms')+'</td><td class="num">'+F(r[1],'mph')+'</td></tr>').join('')+
+        '</tbody></table></div>'+
+        '<div class="r dim"><span class="k">Factor K used (V<sub>10min</sub> = K × V<sub>1min</sub>)</span><span class="v">'+K.toFixed(2)+'</span><span class="u"></span></div>'+
+        '<div class="r dim"><span class="k">Same conversion with the legacy 0.88</span><span class="v">'+F(leg,v.u)+'</span><span class="u">'+M.SPEED[v.u].label+'</span></div>'+
+        '<div class="r dim"><span class="k">Difference vs legacy</span><span class="v">'+
+          N(M.speedTo(Math.abs((v.fr==='60'?ten:one)-leg),'ms',v.u),1)+'</span><span class="u">'+M.SPEED[v.u].label+'</span></div>',
+      flag: v.ex==='at-sea'
+        ? 'WMO/TD-1555 recommends <b>0.93</b> at sea, not the traditional 0.88, and notes 0.88 corresponds more closely to an <b>off-land</b> exposure. JTWC still publishes the legacy relationship (1-min winds higher by 14%, i.e. K = 0.88), so JTWC-derived comparisons will differ from this by about 5%.'
+        : 'Exposure <b>'+M.EXPOSURE_LABEL[v.ex]+'</b> uses K = '+K.toFixed(2)+'. For basin-scale intensity comparison between agencies, at-sea (0.93) is the case WMO recommends.'
+    };
+  },
+  src:'<b>WMO/TD-No. 1555</b>, Harper, Kepert &amp; Ginger (2010), Table 1.2. Reproduced as Appendix 1-A of WMO Typhoon Committee Operational Manual TCP-23. WMO publishes no numerical uncertainty band on these factors; the one case study it gives (TC Orson, North Rankin A, 1989) showed roughly ±6-9% one-sigma scatter.'
+});
+
+card('wind', {
+  title:'TC intensity scale comparison',
+  span:true,
+  fields:[
+    {id:'v',  label:'V<sub>max</sub>', type:'num', val:110, step:1},
+    {id:'u',  label:'Unit',            type:'sel', val:'kt', opts:SPEED_OPTS},
+    {id:'fr', label:'Averaging',       type:'sel', val:'60',
+      opts:[['60','1-minute sustained'],['600','10-minute sustained']]},
+    {id:'ex', label:'Exposure',        type:'sel', val:'at-sea', opts:EXP_OPTS}
+  ],
+  compute(v){
+    const kt = M.speedTo(v.v, v.u, 'kt');
+    const list = M.tcClassifyAll(kt, +v.fr, v.ex);
+    let unverified = false;
+    const body = list.map(r=>{
+      const conv = r.note ? '<span class="chip'+(r.note==='no WMO factor'?' w':' a')+'">'+r.note+'</span>' : '<span class="chip">native</span>';
+      if(r.note==='no WMO factor') unverified = true;
+      return '<tr><td>'+r.scale.name+'<br><span class="chip">'+(r.scale.avg/60)+'-min</span></td>'+
+             '<td class="num">'+N(r.v,0)+'</td>'+
+             '<td class="num">'+N(M.speedTo(r.v,'kt','kmh'),0)+'</td>'+
+             '<td><b>'+r.band.name+'</b></td><td>'+conv+'</td></tr>';
+    }).join('');
+    return {
+      html:'<div class="scroll"><table><thead><tr><th>Scale</th><th class="num">kt</th><th class="num">km/h</th><th>Classification</th><th>Conversion</th></tr></thead><tbody>'+body+'</tbody></table></div>',
+      flag: unverified
+        ? 'IMD uses a 3-minute averaging period, for which WMO/TD-1555 Table 1.2 publishes no agency conversion factor — that row shows the wind unconverted and is <b>not comparable</b>. IMD’s averaging period could not be confirmed from an IMD-published source.'
+        : 'Each scale is evaluated at its own native averaging period, with WMO Table 1.2 applied where the input period differs. PAGASA’s averaging period is inferred from Typhoon Committee practice; PAGASA does not state it directly.'
+    };
+  },
+  src:'Thresholds: NHC (Saffir-Simpson, 1-min); WMO TCP-23 and JMA (10-min); PAGASA, effective 23 March 2022 (knot values are canonical — PAGASA’s published km/h figures are internally inconsistent at the STS boundary); BOM; IMD (<i>Mausam</i>).'
+});
+
+card('wind', {
+  title:'Wind speed &amp; Beaufort force',
+  fields:[
+    {id:'v', label:'Speed', type:'num', val:60, step:0.1},
+    {id:'u', label:'Unit',  type:'sel', val:'kt', opts:SPEED_OPTS}
+  ],
+  compute(v){
+    const kt = M.speedTo(v.v, v.u, 'kt');
+    const b  = M.beaufort(kt);
+    return {
+      rows: rowsOf([
+        ['knots',  N(kt,1),                        'kt', v.u==='kt'?'hero':''],
+        ['km/h',   N(M.speedTo(v.v,v.u,'kmh'),1),  'km/h', v.u==='kmh'?'hero':''],
+        ['m/s',    N(M.speedTo(v.v,v.u,'ms'),2),   'm/s',  v.u==='ms'?'hero':''],
+        ['mph',    N(M.speedTo(v.v,v.u,'mph'),1),  'mph',  v.u==='mph'?'hero':''],
+        ['ft/s',   N(M.speedTo(v.v,v.u,'fts'),1),  'ft/s', v.u==='fts'?'hero':''],
+        ['Beaufort force', b ? 'F'+b.f+' · '+b.name : '—', '', 'dim']
+      ]),
+      flag: b ? '<b>'+b.name+'</b> — '+b.sea+'. Beaufort limits are for the <b>mean</b> wind at 10 m over open terrain.' : null
+    };
+  },
+  src:'<b>Exact by definition:</b> 1 nmi = 1852 m, 1 ft = 0.3048 m, 1 mile = 1609.344 m (NIST SP 811 App. B.9). Conversions go through m/s directly, never chained through rounded factors. Beaufort limits: WMO scale as published by the UK Met Office and NWS.'
+});
+
+card('wind', {
+  title:'Gust factor (WMO Table 1.1)',
+  fields:[
+    {id:'v',  label:'Mean wind', type:'num', val:40, step:1},
+    {id:'u',  label:'Unit',      type:'sel', val:'kt', opts:SPEED_OPTS},
+    {id:'t0', label:'Of period', type:'sel', val:'600',
+      opts:[['60','1 min'],['120','2 min'],['180','3 min'],['600','10 min'],['3600','1 hour']]},
+    {id:'ta', label:'Gust of',   type:'sel', val:'3',
+      opts:[['3','3 s'],['60','60 s'],['120','120 s'],['180','180 s'],['600','600 s']]},
+    {id:'ex', label:'Exposure',  type:'sel', val:'at-sea', opts:EXP_OPTS}
+  ],
+  rule:'WMO is explicit: <b>mean wind speeds must not be converted between averaging periods using gust factors — only gust wind speeds.</b> The factor is also valid only between a mean and a gust <b>at the same height</b> (10 m).',
+  compute(v){
+    const G = M.gustFactor(+v.ta, +v.t0, v.ex);
+    if(!isFinite(G)) return {rows:rowsOf([['gust factor','—','']]),
+      flag:'Table 1.1 has no entry for a '+v.ta+'-second gust within a '+(+v.t0/60)+'-minute mean. The gust duration must be shorter than or equal to the averaging period.'};
+    const ms = M.speedTo(v.v, v.u, 'ms')*G;
+    return {
+      rows: rowsOf([
+        ['gust factor G', G.toFixed(2), '', 'hero'],
+        ['peak gust', N(M.speedTo(ms,'ms',v.u),1), M.SPEED[v.u].label, 'hero'],
+        ['in knots',  N(M.speedTo(ms,'ms','kt'),1),  'kt', 'dim'],
+        ['in km/h',   N(M.speedTo(ms,'ms','kmh'),1), 'km/h', 'dim'],
+        ['in m/s',    N(M.speedTo(ms,'ms','ms'),2),  'm/s', 'dim']
+      ])
+    };
+  },
+  src:'<b>WMO/TD-No. 1555</b> Table 1.1. G(&tau;, T<sub>0</sub>) converts a mean wind of averaging period T<sub>0</sub> into the expected maximum &tau;-second gust within that period. A 3-second average only counts as “the gust” if it is the highest 3-second average in the interval.'
+});
+
+card('wind', {
+  title:'Pressure – wind relationship',
+  fields:[
+    {id:'mode', label:'Solve for', type:'sel', val:'w',
+      opts:[['w','Wind from central pressure'],['p','Central pressure from wind']]},
+    {id:'val',  label:'Input (hPa or kt)', type:'num', val:950, step:1},
+    {id:'meth', label:'Method', type:'sel', val:'ah77',
+      opts:[['ah77','Atkinson-Holliday 1977 (W Pacific)'],['kz07','Knaff-Zehr 2007 (N Atl / E-C Pac)']]},
+    {id:'penv', label:'P<sub>env</sub> (KZ07)', type:'num', val:1010, step:1},
+    {id:'lat',  label:'Latitude (KZ07)', type:'num', val:15, step:1},
+    {id:'c',    label:'Translation kt (KZ07)', type:'num', val:10, step:1},
+    {id:'S',    label:'Size param S (KZ07)', type:'num', val:1.0, step:0.05}
+  ],
+  compute(v){
+    const S = Math.max(v.S, 0.4);
+    let wind, pres;
+    if(v.meth==='ah77'){
+      if(v.mode==='w'){ pres=v.val; wind=M.ah77WindFromP(pres); }
+      else            { wind=v.val; pres=M.ah77PFromWind(wind); }
+    } else {
+      if(v.mode==='w'){ pres=v.val; wind=M.kz07WindFromP(pres, v.penv, v.lat, v.c, S); }
+      else            { wind=v.val; pres=M.kz07PFromWind(wind, v.penv, v.lat, v.c, S); }
+    }
+    const err = v.meth==='ah77'
+      ? 'Chen et al. (2019) report MAE ≈ 10.5 hPa on the dependent W Pacific dataset.'
+      : 'Knaff &amp; Zehr report RMSE 5.8 hPa (pressure) and 7.8 kt (wind) on the developmental dataset.';
+    return {
+      rows: rowsOf([
+        ['V<sub>max</sub> (1-min)', N(wind,1), 'kt', 'hero'],
+        ['central pressure', N(pres,1), 'hPa', 'hero'],
+        ['V<sub>max</sub> in km/h', N(M.speedTo(wind,'kt','kmh'),0), 'km/h', 'dim'],
+        ['V<sub>max</sub> as 10-min at sea', N(M.speedTo(wind*0.93,'kt','kmh'),0), 'km/h', 'dim']
+      ]),
+      flag: (v.meth==='ah77'
+        ? 'Atkinson-Holliday was fitted only to the western North Pacific and Knaff &amp; Zehr showed it was improperly fitted to its own source data, giving a low-pressure bias above about 80 kt. '
+        : 'Developed on North Atlantic and Central/East Pacific data, 1989-2004. Solved by numerically inverting eq. 7 rather than using the printed eq. 8, whose published sign on the &Delta;P term does not round-trip. ') + err
+    };
+  },
+  src:'Atkinson &amp; Holliday (1977), <i>Mon. Wea. Rev.</i> <b>105</b>, 421-427: V = 6.70(1010−P<sub>c</sub>)<sup>0.644</sup> kt. Knaff &amp; Zehr (2007), <i>Wea. Forecasting</i> <b>22</b>, eq. 7. Both give <b>1-minute</b> sustained wind.'
+});
+
+card('wind', {
+  title:'Wind components',
+  fields:[
+    {id:'mode', label:'Direction', type:'sel', val:'sd',
+      opts:[['sd','Speed &amp; direction → u, v'],['uv','u, v → speed &amp; direction']]},
+    {id:'a', label:'Speed / u', type:'num', val:15, step:0.1},
+    {id:'b', label:'Dir (deg) / v', type:'num', val:225, step:1},
+    {id:'u', label:'Unit', type:'sel', val:'ms', opts:SPEED_OPTS}
+  ],
+  compute(v){
+    if(v.mode==='sd'){
+      const r = M.uvFromSpeedDir(v.a, v.b);
+      return {rows: rowsOf([
+        ['u (eastward)', N(r.u,3), M.SPEED[v.u].label, 'hero'],
+        ['v (northward)', N(r.v,3), M.SPEED[v.u].label, 'hero'],
+        ['blowing toward', N((v.b+180)%360,0), 'deg', 'dim']
+      ])};
+    }
+    const r = M.speedDirFromUV(v.a, v.b);
+    return {rows: rowsOf([
+      ['speed', N(r.speed,3), M.SPEED[v.u].label, 'hero'],
+      ['direction (from)', N(r.dir,1), 'deg', 'hero'],
+      ['blowing toward', N((r.dir+180)%360,1), 'deg', 'dim']
+    ])};
+  },
+  src:'Meteorological convention: direction is the direction the wind blows <b>from</b>, degrees clockwise from true north, so u = −V sin&theta; and v = −V cos&theta;. Dropping the minus signs gives the oceanographic (“toward”) convention. Verified against MetPy: u = v = 10 m/s → 225°.'
+});
+
+card('wind', {
+  title:'Height adjustment to 10 m',
+  fields:[
+    {id:'v',  label:'Measured speed', type:'num', val:12, step:0.1},
+    {id:'z',  label:'At height (m)',  type:'num', val:20, step:0.5},
+    {id:'zt', label:'To height (m)',  type:'num', val:10, step:0.5},
+    {id:'z0', label:'Terrain', type:'sel', val:'open',
+      opts:[['sea','Open sea (z₀ 0.0002)'],['smooth','Beach, reef (0.005)'],
+            ['open','Open, airports (0.03)'],['roughly-open','Low crops, few trees (0.10)'],
+            ['rough','Small towns, high crops (0.25)'],['very-rough','Plantations (0.5)'],
+            ['closed','Rainforest, CBD (1.0)']]}
+  ],
+  compute(v){
+    const z0 = M.Z0[v.z0];
+    const lg = M.logProfile(v.v, v.z, z0, v.zt);
+    return {
+      rows: rowsOf([
+        ['log law (z₀ = '+z0+' m)', N(lg,2), 'm/s', 'hero'],
+        ['power law &alpha; = 1/7', N(M.powerLaw(v.v,v.z,v.zt,1/7),2), 'm/s'],
+        ['power law &alpha; = 0.11 (offshore)', N(M.powerLaw(v.v,v.z,v.zt,0.11),2), 'm/s', 'dim'],
+        ['ratio to input', isFinite(lg)?N(lg/v.v,3):'—', '', 'dim']
+      ]),
+      flag: 'The log law holds for <b>neutral stability</b> only and needs z &gt; z₀. Over vegetated or built terrain a constant 1/7 power-law exponent “may yield quite erroneous estimates” — prefer the log law there. Power-law accuracy is generally limited to height differences under about 50 m.'
+    };
+  },
+  src:'Log profile from the surface-layer form u(z) = (u<sub>*</sub>/k)·ln(z/z₀), von Kármán k ≈ 0.4 (AMS Glossary). Roughness lengths: Davenport-Wieringa classification, WMO/TD-No. 1555 Table 2.1 (mid-range value of each class).'
+});
+
+card('wind', {
+  title:'Wind power density',
+  fields:[
+    {id:'v',   label:'Speed', type:'num', val:8, step:0.1},
+    {id:'u',   label:'Unit',  type:'sel', val:'ms', opts:SPEED_OPTS},
+    {id:'rho', label:'Air density', type:'num', val:1.225, step:0.001}
+  ],
+  compute(v){
+    const ms = M.speedTo(v.v, v.u, 'ms');
+    return {rows: rowsOf([
+      ['power density', N(M.windPowerDensity(ms, v.rho),1), 'W/m²', 'hero'],
+      ['through a 100 m rotor', N(M.windPowerDensity(ms,v.rho)*Math.PI*2500/1000,0), 'kW', 'dim'],
+      ['speed used', N(ms,2), 'm/s', 'dim']
+    ]),
+    flag:'For a time series, average the <b>cube</b> of the speed, never cube the mean speed. Cubing the mean underestimates, often by 1.5-3× depending on how wide the distribution is. 10 minutes is the standard averaging period in wind energy work.'};
+  },
+  src:'P/A = ½&rho;v³. Standard density 1.225 kg/m³ at 15 °C and sea level; correct with &rho; = p/(R<sub>d</sub>T<sub>v</sub>) using the pressure-and-altitude module.'
+});
+
+/* =================================================================
+   MOISTURE
+   ================================================================= */
+
+card('moist', {
+  title:'Humidity solver',
+  span:true,
+  cols:true,
+  fields:[
+    {id:'t',  label:'Air temperature °C', type:'num', val:30,     step:0.1},
+    {id:'p',  label:'Pressure hPa',       type:'num', val:1013.25, step:0.1},
+    {id:'kn', label:'Known quantity',     type:'sel', val:'rh',
+      opts:[['rh','Relative humidity %'],['td','Dewpoint °C'],['tw','Wet-bulb °C']]},
+    {id:'x',  label:'Its value',          type:'num', val:70, step:0.1}
+  ],
+  compute(v){
+    const t = v.t, p = v.p;
+    let rh, td;
+    if(v.kn==='rh'){ rh = v.x; td = M.dewpointFromRH(t, rh); }
+    else if(v.kn==='td'){ td = v.x; rh = M.rhFromDewpoint(t, td); }
+    else {
+      const tw = v.x;
+      const e = M.esWater(tw) - 6.60e-4*p*(1+0.00115*tw)*(t-tw);
+      rh = 100*e/M.esWater(t); td = M.dewpointFromRH(t, rh);
+    }
+    const es = M.esWater(t), e = (rh/100)*es;
+    const w  = M.mixingRatio(e, p), q = M.specificHumidity(e, p);
+    const tK = t+273.15;
+    const twS = M.wetBulbStull(t, rh), twP = M.wetBulbPsychro(t, rh, p);
+    const stullOK = rh>=5 && rh<=99 && t>=-20 && t<=50 && Math.abs(p-1013.25)<15;
+    const rows = [
+      ['relative humidity', N(rh,1), '%', 'hero'],
+      ['dewpoint',          N(td,2), '°C', 'hero'],
+      ['wet-bulb (psychrometric)', N(twP,2), '°C', 'hero'],
+      ['wet-bulb (Stull 2011)', N(twS,2), '°C', stullOK?'':'dim'],
+      ['vapour pressure e',  N(e,3),  'hPa'],
+      ['saturation e<sub>s</sub>', N(es,3), 'hPa', 'dim'],
+      ['mixing ratio w',     N(w*1000,3), 'g/kg'],
+      ['specific humidity q',N(q*1000,3), 'g/kg'],
+      ['absolute humidity',  N(M.absoluteHumidity(e,tK),2), 'g/m³'],
+      ['virtual temperature',N(M.virtualTemp(tK,w)-273.15,2), '°C'],
+      ['T<sub>v</sub> − T',  N(M.virtualTemp(tK,w)-tK,2), 'K', 'dim'],
+      ['dewpoint depression',N(t-td,2), 'K', 'dim']
+    ];
+    if(twP < 0){
+      rows.splice(3, 0, ['ice-bulb (bulb frozen)', N(M.iceBulbPsychro(t, rh, p),2), '°C', 'dim']);
+    }
+    if(t < 0){
+      const rhi = M.rhIceFromRhWater(t, rh);
+      rows.push(['RH over ice',    N(rhi,1), '%', 'dim']);
+      rows.push(['frost point',    N(M.frostpointFromRHi(t, rhi),2), '°C', 'dim']);
+    }
+    let flag = null;
+    if(rh>100) flag = 'Relative humidity exceeds 100% — the dewpoint you entered is above the air temperature. Supersaturation with respect to water is possible in the free atmosphere but not at a screen observation.';
+    else if(rh<=0) flag = 'Relative humidity is zero or negative; the moisture variables are undefined.';
+    else if(!stullOK) flag = 'The Stull (2011) wet-bulb approximation is outside its published envelope here (RH 5-99%, T −20 to +50 °C, <b>sea level pressure only</b> — it takes no pressure input). Use the psychrometric value, which is solved iteratively and does account for pressure.';
+    return {rows: rowsOf(rows), flag: flag};
+  },
+  src:'Saturation vapour pressure: the <b>WMO/CIMO</b> Magnus pair, e<sub>s</sub> = 6.112·exp(17.62t/(243.12+t)) hPa over water (−45 to +60 °C) and 6.112·exp(22.46t/(272.62+t)) over ice (−65 to +0.01 °C), stated uncertainty under 0.6%. Both branches share the 6.112 prefactor, so they coincide exactly at 0 °C — pairing formulas from different sources puts a spurious step there. Invertible in closed form, so dewpoint round-trips exactly. Wet-bulb bisects e = e<sub>s</sub>(T<sub>w</sub>) − A·p·(1+0.00115T<sub>w</sub>)(T−T<sub>w</sub>), A = 6.60×10⁻⁴ K⁻¹ (AMS Glossary; FAO-56 Annex 3), on the <b>liquid</b> branch throughout — a bulb below 0 °C is supercooled until it freezes, and the frozen bulb is a different equilibrium, reported separately as the ice-bulb rather than switched into silently.'
+});
+
+function humidexBand(h){
+  if(h<20) return 'no discomfort';
+  if(h<30) return 'little to no discomfort';
+  if(h<40) return 'some discomfort';
+  if(h<46) return 'great discomfort, avoid exertion';
+  return 'dangerous, heat stroke quite possible';
+}
+card('moist', {
+  title:'Comfort &amp; heat stress indices',
+  span:true,
+  cols:true,
+  fields:[
+    {id:'t',  label:'Temperature °C', type:'num', val:32, step:0.1},
+    {id:'rh', label:'Relative humidity %', type:'num', val:75, step:1},
+    {id:'v',  label:'Wind at 10 m km/h', type:'num', val:12, step:1}
+  ],
+  compute(v){
+    const t=v.t, rh=v.rh, vk=v.v;
+    const td = M.dewpointFromRH(t, rh);
+    const tF = t*9/5+32;
+    const hi = M.heatIndexF(tF, rh);
+    const hiC = (hi.hi-32)*5/9;
+    const hx = M.humidex(t, td);
+    const at = M.apparentTempBOM(t, rh, vk/3.6);
+    const wb = M.wbgtSimple(t, rh);
+    const wc = M.windChillC(t, vk);
+    const wcOK = t<=10 && vk>4.8;
+    const rows = [
+      ['heat index',        N(hiC,1), '°C', 'hero'],
+      ['heat index (°F)',   N(hi.hi,1), '°F', 'dim'],
+      ['humidex',           N(hx,1), '', 'hero'],
+      ['apparent temp (shade)', N(at,1), '°C', 'hero'],
+      ['simplified WBGT',   N(wb,1), '°C'],
+      ['wind chill',        wcOK?N(wc,1):'n/a', '°C', wcOK?'':'dim'],
+      ['dewpoint',          N(td,1), '°C', 'dim'],
+      ['heat index branch', hi.branch, '', 'dim'],
+      ['humidex band',      humidexBand(hx), '', 'dim']
+    ];
+    let flag = null;
+    if(hi.hi>110 && hi.branch!=='simple')
+      flag = 'Above about 110 °F the Rothfusz polynomial extrapolates badly — at 104 °F and 60% RH it overshoots the published NWS chart by roughly 8 °F. Treat high heat-index values as indicative only. Lu &amp; Romps (2022) rebuilt the underlying model to fix exactly this.';
+    else if(!wcOK)
+      flag = 'Wind chill is defined only at or below 10 °C with wind above about 5 km/h, so it is not reported here. The other indices are for warm conditions and are the relevant ones.';
+    return {rows: rowsOf(rows), flag: flag};
+  },
+  src:'<b>Heat index:</b> full four-step NWS procedure — simple Steadman form first, Rothfusz regression above 80 °F, then the low-humidity (RH&lt;13%, 80-112 °F) or high-humidity (RH&gt;85%, 80-87 °F) adjustment. Stated error ±1.3 °F against Steadman’s table. <b>Wind chill:</b> 2001 NWS / ECCC index, metric form, valid T ≤ 10 °C and V &gt; 5 km/h. <b>Humidex:</b> ECCC official equation (Masterton &amp; Richardson 1979). <b>Apparent temperature:</b> Steadman/BOM shade version, AT = T<sub>a</sub> + 0.33e − 0.70ws − 4.00. <b>WBGT:</b> BOM simplified approximation, which assumes moderately high radiation and light wind and takes no radiation or wind input.'
+});
+
+/* =================================================================
+   PRESSURE & ALTITUDE
+   ================================================================= */
+
+const PRESS_OPTS = [['hPa','hPa (= mb)'],['inHg','inHg'],['mmHg','mmHg'],['kPa','kPa'],
+                    ['Pa','Pa'],['psi','psi'],['atm','atm'],['Torr','Torr']];
+
+card('press', {
+  title:'Pressure units',
+  fields:[
+    {id:'v', label:'Value', type:'num', val:1013.25, step:0.01},
+    {id:'u', label:'Unit',  type:'sel', val:'hPa', opts:PRESS_OPTS}
+  ],
+  compute(v){
+    const to = u => M.pressTo(v.v, v.u, u);
+    return {rows: rowsOf([
+      ['hPa / mb', N(to('hPa'),3), 'hPa', v.u==='hPa'?'hero':''],
+      ['inHg',     N(to('inHg'),4), 'inHg', v.u==='inHg'?'hero':''],
+      ['mmHg',     N(to('mmHg'),3), 'mmHg'],
+      ['kPa',      N(to('kPa'),4), 'kPa'],
+      ['psi',      N(to('psi'),5), 'psi'],
+      ['atm',      N(to('atm'),5), 'atm', 'dim'],
+      ['Torr',     N(to('Torr'),3), 'Torr', 'dim']
+    ]),
+    flag:'Three traps worth knowing: 760 mmHg is <b>not</b> exactly 1 atm (it is 1013.2501 hPa; 760 <i>Torr</i> is exact), 29.92 inHg is <b>not</b> 1013.25 hPa (it is 1013.2075, about 1.2 ft of altitude), and mmHg and Torr differ by 1.4×10⁻⁷.'};
+  },
+  src:'1 inHg = 33.86388640341 hPa <b>exactly</b>, from conventional mercury density 13595.1 kg/m³ (WMO-No. 8 Annex 3.B) × g₀ = 9.80665 m/s² × 0.0254 m. The familiar 33.8639 is that value rounded. 1 atm = 101325 Pa and 1 Torr = atm/760, both by definition (NIST SP 811 App. B.8).'
+});
+
+card('press', {
+  title:'Station pressure → mean sea level (QFF)',
+  fields:[
+    {id:'ps', label:'Station pressure hPa', type:'num', val:950, step:0.1},
+    {id:'h',  label:'Elevation (gpm)', type:'num', val:500, step:1},
+    {id:'t',  label:'Temperature °C', type:'num', val:22, step:0.1},
+    {id:'rh', label:'Relative humidity %', type:'num', val:70, step:1}
+  ],
+  compute(v){
+    const es = (v.rh/100)*M.esWater(v.t);
+    const p0 = M.qff(v.ps, v.h, v.t, es);
+    const tmv = M.qffTmv(v.h, v.t, es);
+    const sens = p0*M.G0*v.h/(287.05*tmv*tmv);
+    return {
+      rows: rowsOf([
+        ['MSL pressure (QFF)', N(p0,2), 'hPa', 'hero'],
+        ['reduction applied',  N(p0-v.ps,2), 'hPa'],
+        ['mean virtual temp of column', N(tmv-273.15,2), '°C'],
+        ['  station term',     N(v.t,2), '°C', 'dim'],
+        ['  lapse term (a·H/2)', N(0.0065*v.h/2,2), 'K', 'dim'],
+        ['  humidity term (0.12·e)', N(es*0.12,2), 'K', 'dim'],
+        ['sensitivity to column temp', N(sens,3), 'hPa/K', 'dim']
+      ]),
+      flag: v.h>750
+        ? 'WMO states this formula applies to <b>stations below 750 m</b>. At '+N(v.h,0)+' gpm the reduction is '+N(sens,2)+' hPa per kelvin of error in a column temperature that cannot be measured, because there is no air there. A realistic 3-5 K uncertainty is '+N(sens*3,1)+'-'+N(sens*5,1)+' hPa — often larger than the synoptic pressure gradient you are trying to analyse.'
+        : null
+    };
+  },
+  src:'<b>WMO-No. 8</b> Ch. 3, eq. 3.2 (exponential form): p₀ = p<sub>s</sub>·exp[g<sub>n</sub>H<sub>p</sub>/(R(T<sub>s</sub> + aH<sub>p</sub>/2 + e<sub>s</sub>C<sub>h</sub>))], a = 0.0065 K/gpm, C<sub>h</sub> = 0.12 K/hPa, R = 287.05 J/kg/K. The eq. 3.1 log form is avoided here: its printed constant K<sub>p</sub> = 0.0148275 does not equal g<sub>n</sub>/(R·ln10) = 0.0148370, a 0.064% discrepancy worth about 0.08 hPa at 1000 gpm.'
+});
+
+card('press', {
+  title:'QNH, QFE and pressure altitude',
+  fields:[
+    {id:'ps', label:'Station pressure hPa', type:'num', val:995, step:0.1},
+    {id:'h',  label:'Aerodrome elevation m', type:'num', val:150, step:1}
+  ],
+  compute(v){
+    const qISA = M.qnhISA(v.ps, v.h);
+    const qNWS = M.qnhNWS(v.ps, v.h);
+    const pa   = M.pressureAltitude(v.ps);
+    const grad = (M.pressureAltitude(v.ps-1)-pa)/0.3048;
+    return {
+      rows: rowsOf([
+        ['QNH (ISA reduction)', N(qISA,2), 'hPa', 'hero'],
+        ['QNH (NWS/FAA form)',  N(qNWS,2), 'hPa'],
+        ['difference between the two', N(qISA-qNWS,2), 'hPa', 'dim'],
+        ['QFE (= station pressure)', N(v.ps,2), 'hPa'],
+        ['QNE / standard setting', '1013.25', 'hPa', 'dim'],
+        ['pressure altitude', N(pa,1), 'm', 'hero'],
+        ['pressure altitude', N(pa/0.3048,0), 'ft'],
+        ['altitude per hPa here', N(grad,2), 'ft/hPa', 'dim'],
+        ['QNH in inHg', N(M.pressTo(qISA,'hPa','inHg'),2), 'inHg', 'dim']
+      ]),
+      flag:'<b>QNH is not QFF.</b> QNH reduces to sea level through the <i>standard</i> atmosphere so that every altimeter at the aerodrome reads the same elevation; QFF uses the <i>actual</i> column temperature and is what belongs on a synoptic chart. On a cold day at an elevated aerodrome QFF exceeds QNH, and the gap grows with elevation. The two NWS formulas above are not exact inverses of each other — the operational one carries a 0.3 hPa offset (about 8 ft).'
+    };
+  },
+  src:'QNH (ISA) = p<sub>s</sub>/(1 − Lh/T₀)<sup>5.2558797</sup> using the ICAO troposphere. NWS/FAA operational form from NWS WXCALC <i>altimeterSetting</i>, which uses T₀ = 288 K and the exponent 0.190284 rather than exact ISA values. The “1 hPa ≈ 27 ft” rule is exact only near sea level: 27.31 ft/hPa at MSL, 31.7 at 5000 ft, 37.0 at 10000 ft.'
+});
+
+card('press', {
+  title:'Density altitude &amp; air density',
+  fields:[
+    {id:'p',  label:'Station pressure hPa', type:'num', val:1005, step:0.1},
+    {id:'t',  label:'Temperature °C', type:'num', val:34, step:0.1},
+    {id:'td', label:'Dewpoint °C', type:'num', val:26, step:0.1}
+  ],
+  compute(v){
+    const d  = M.densityAltitude(v.p, v.t, v.td);
+    const pa = M.pressureAltitude(v.p);
+    const isaT = M.isa(Math.max(pa,0)).T - 273.15;
+    return {
+      rows: rowsOf([
+        ['density altitude', N(d.da,0), 'm', 'hero'],
+        ['density altitude', N(d.da/0.3048,0), 'ft', 'hero'],
+        ['pressure altitude', N(pa/0.3048,0), 'ft'],
+        ['air density &rho;', N(d.rho,4), 'kg/m³'],
+        ['virtual temperature', N(d.Tv-273.15,2), '°C'],
+        ['T<sub>v</sub> − T (moisture effect)', N(d.Tv-273.15-v.t,2), 'K', 'dim'],
+        ['ISA temp at this pressure altitude', N(isaT,1), '°C', 'dim'],
+        ['ISA deviation', N(v.t-isaT,1), 'K', 'dim'],
+        ['density ratio &rho;/&rho;₀', N(d.rho/1.225,4), '', 'dim']
+      ]),
+      flag: v.td>v.t ? 'Dewpoint exceeds air temperature, which is not physical — the virtual temperature and density will be wrong.' :
+        'Moist air is <b>less</b> dense than dry air at the same pressure and temperature, because water vapour has a lower molar mass than dry air. That is what the virtual temperature correction captures.'
+    };
+  },
+  src:'&rho; = p/(R<sub>d</sub>T<sub>v</sub>) with T<sub>v</sub> = T/(1 − 0.378e/p), then density altitude inverted from the ISA density profile: DA = (T₀/L)[1 − (&rho;/&rho;₀)<sup>1/4.2558797</sup>]. This is the exact ISA form rather than the NWS 145366 ft / 0.235 approximation, which uses T₀ = 288 K and runs about 0.05% low.'
+});
+
+card('press', {
+  title:'Standard atmosphere (ISA)',
+  fields:[
+    {id:'mode', label:'Enter', type:'sel', val:'h',
+      opts:[['h','Height → state'],['p','Pressure → height']]},
+    {id:'val',  label:'Height or pressure', type:'num', val:5500, step:10},
+    {id:'ht',   label:'Height is', type:'sel', val:'gp',
+      opts:[['gp','Geopotential (gpm)'],['gm','Geometric (m)']]}
+  ],
+  compute(v){
+    let H;
+    if(v.mode==='h') H = v.ht==='gm' ? M.geometricToGeopotential(v.val) : v.val;
+    else             H = M.pressureAltitude(v.val);
+    const s = M.isa(H);
+    if(!isFinite(s.p)) return {rows:rowsOf([['out of range','—','']]),
+      flag:'This calculator covers the ISA to 20 km geopotential (troposphere plus the first isothermal stratosphere layer).'};
+    return {
+      rows: rowsOf([
+        ['pressure',    N(s.p,2), 'hPa', 'hero'],
+        ['temperature', N(s.T-273.15,2), '°C', 'hero'],
+        ['temperature', N(s.T,2), 'K', 'dim'],
+        ['density',     N(s.rho,4), 'kg/m³'],
+        ['geopotential height', N(H,1), 'gpm'],
+        ['geometric height',    N(M.geopotentialToGeometric(H),1), 'm'],
+        ['difference',  N(M.geopotentialToGeometric(H)-H,2), 'm', 'dim'],
+        ['layer', H<=11000?'troposphere (L = 6.5 K/km)':'stratosphere (isothermal, 216.65 K)', '', 'dim']
+      ]),
+      flag:'All ISA layer boundaries (11000, 20000 gpm) are defined in <b>geopotential</b> metres. A calculator fed geometric height without converting is about 19 m out at the tropopause.'
+    };
+  },
+  src:'ISO 2533 / ICAO: p₀ = 1013.25 hPa, T₀ = 288.15 K, &rho;₀ = 1.225 kg/m³, L = 6.5 K/km, g₀ = 9.80665 m/s², R = 287.05287 J/kg/K, exponent g₀/(RL) = 5.2558797, tropopause 11000 gpm at 216.65 K and 226.32 hPa. Geopotential–geometric conversion uses the ISO 2533 nominal earth radius 6356766 m, which is not the physical radius — do not substitute 6371 km.'
+});
+
+card('press', {
+  title:'Hypsometric equation &amp; thickness',
+  fields:[
+    {id:'p1', label:'Lower level hPa', type:'num', val:1000, step:1},
+    {id:'p2', label:'Upper level hPa', type:'num', val:500, step:1},
+    {id:'tv', label:'Mean virtual temp °C', type:'num', val:-7, step:0.1}
+  ],
+  compute(v){
+    const tv = v.tv+273.15;
+    const dz = M.thickness(v.p1, v.p2, tv);
+    const is1000500 = Math.abs(v.p1-1000)<1 && Math.abs(v.p2-500)<1;
+    return {
+      rows: rowsOf([
+        ['thickness', N(dz,1), 'm', 'hero'],
+        ['thickness', N(dz/10,1), 'dam', 'dim'],
+        ['mean virtual temp', N(tv,2), 'K', 'dim'],
+        ['T<sub>v</sub> for a 5400 m 1000-500 thickness', N(M.meanTvFromThickness(1000,500,5400)-273.15,2), '°C', 'dim']
+      ]),
+      flag: is1000500
+        ? 'The 5400 m line is the traditional 1000-500 hPa rain/snow discriminator: poleward of it, predict snow. Thickness here is '+N(dz,0)+' m — <b>'+(dz<5400?'snow side':'rain side')+'</b>. But this is a bulk mean over ~5.5 km, while precipitation type is decided in the lowest 1-2 km, so a warm nose at 850 hPa is invisible to it. Layered thickness (1000-850 at 1300 m, 850-700 at 1540 m) has more skill, and over terrain the 1000 hPa surface is underground and the rule fails.'
+        : null
+    };
+  },
+  src:'Z₂ − Z₁ = (R<sub>d</sub>T̄<sub>v</sub>/g₀)·ln(p₁/p₂) — from the hydrostatic equation and the ideal gas law (AMS Glossary). Threshold values from NOAA/NWS JetStream and the NWS Springfield winter checklist. The 5400 m figure is climatologically tuned, not physical, and regional values run from about 5400 m in the eastern US to 5460 m in maritime air.'
+});
+
+/* =================================================================
+   THERMODYNAMICS
+   ================================================================= */
+
+card('thermo', {
+  title:'Parcel properties',
+  fields:[
+    {id:'t',  label:'Temperature °C', type:'num', val:28, step:0.1},
+    {id:'td', label:'Dewpoint °C',    type:'num', val:22, step:0.1},
+    {id:'p',  label:'Pressure hPa',   type:'num', val:1000, step:1}
+  ],
+  compute(v){
+    const tK = v.t+273.15;
+    const e  = M.esBolton(v.td);
+    const w  = M.mixingRatio(e, v.p);
+    const th = M.potentialTemp(tK, v.p);
+    const TL = M.boltonTL(tK, e);
+    const the= M.thetaE(tK, v.p, w*1000);
+    const tv = M.virtualTemp(tK, w);
+    return {rows: rowsOf([
+      ['potential temperature &theta;',  N(th,2), 'K', 'hero'],
+      ['equivalent potential &theta;<sub>e</sub>', N(the,2), 'K', 'hero'],
+      ['virtual temperature T<sub>v</sub>', N(tv-273.15,2), '°C'],
+      ['virtual potential &theta;<sub>v</sub>', N(th*(1+0.61*w),2), 'K'],
+      ['mixing ratio w', N(w*1000,3), 'g/kg'],
+      ['vapour pressure e', N(e,3), 'hPa', 'dim'],
+      ['relative humidity', N(M.rhFromDewpoint(v.t,v.td),1), '%', 'dim'],
+      ['temperature at LCL (T<sub>L</sub>)', N(TL,2), 'K', 'dim'],
+      ['&theta;<sub>e</sub> − &theta;', N(the-th,2), 'K', 'dim']
+    ]),
+    flag: v.td>v.t ? 'Dewpoint exceeds temperature. The parcel is supersaturated and these values are extrapolations.' : null};
+  },
+  src:'&theta; = T(1000/p)<sup>2/7</sup> (Poisson). &theta;<sub>e</sub> from <b>Bolton (1980) eq. 43</b>, max error 0.3 K, usually under 0.1 K, with T<sub>L</sub> from his eq. 15: T<sub>L</sub> = 2840/(3.5 ln T − ln e − 4.805) + 55. Bolton’s own e<sub>s</sub> (eq. 10, 6.112·exp(17.67t/(t+243.5))) is used inside these because his coefficients are fitted to it. T<sub>v</sub> uses the exact form T(1+w/&epsilon;)/(1+w), not the 0.61 approximation.'
+});
+
+card('thermo', {
+  title:'Lapse rates',
+  fields:[
+    {id:'t', label:'Temperature °C', type:'num', val:10, step:0.1},
+    {id:'p', label:'Pressure hPa',   type:'num', val:700, step:1}
+  ],
+  compute(v){
+    const tK = v.t+273.15;
+    const ms = M.moistLapse(tK, v.p);
+    const es = M.esWater(v.t);
+    return {rows: rowsOf([
+      ['saturated adiabatic &Gamma;<sub>s</sub>', N(ms,3), 'K/km', 'hero'],
+      ['dry adiabatic &Gamma;<sub>d</sub> = g/c<sub>p</sub>', N(M.dryLapse(),3), 'K/km', 'hero'],
+      ['ISA environmental', '6.500', 'K/km'],
+      ['saturation mixing ratio', N(1000*M.mixingRatio(es,v.p),3), 'g/kg', 'dim'],
+      ['&Gamma;<sub>d</sub> − &Gamma;<sub>s</sub>', N(M.dryLapse()-ms,3), 'K/km', 'dim'],
+      ['SPC superadiabatic threshold', '9.600', 'K/km', 'dim']
+    ]),
+    flag:'SPC classification of an <b>environmental</b> lapse rate: above 9.6 K/km absolutely unstable; 6 to 9.6 K/km conditionally unstable; below 6 K/km absolutely stable. Do not confuse an environmental lapse rate (a measured sounding) with a process lapse rate (what an individual parcel does).'};
+  },
+  src:'&Gamma;<sub>d</sub> = g/c<sub>pd</sub> computed from g₀ = 9.80665 and c<sub>pd</sub> = 1004.67 J/kg/K. Saturated adiabat from <b>Stull, <i>Practical Meteorology</i> eq. 4.37b</b>: &Gamma;<sub>s</sub> = &Gamma;<sub>d</sub>(1 + a·r<sub>s</sub>/T)/(1 + b·r<sub>s</sub>/T²) with a = 8711 K, b = 1.35×10⁷ K². Reproduces Stull’s worked example (10 °C, 70 kPa → 4.58 K/km) exactly.'
+});
+
+card('thermo', {
+  title:'Temperature at altitude',
+  fields:[
+    {id:'t0', label:'Temperature °C', type:'num', val:30, step:0.1},
+    {id:'z0', label:'At height m',    type:'num', val:0,  step:10},
+    {id:'z1', label:'To height m',    type:'num', val:1500, step:10},
+    {id:'g',  label:'Lapse rate K/km',type:'num', val:6.5, step:0.1}
+  ],
+  compute(v){
+    const dz = (v.z1-v.z0)/1000;
+    return {rows: rowsOf([
+      ['temperature', N(v.t0 - v.g*dz,2), '°C', 'hero'],
+      ['change',      N(-v.g*dz,2), 'K'],
+      ['height change', N(v.z1-v.z0,0), 'm', 'dim'],
+      ['at the dry adiabatic rate', N(v.t0 - M.dryLapse()*dz,2), '°C', 'dim'],
+      ['at the ISA rate 6.5 K/km',  N(v.t0 - 6.5*dz,2), '°C', 'dim']
+    ])};
+  },
+  src:'Linear form T(z) = T₀ − &Gamma;(z − z₀), exact for a constant lapse rate. For a parcel rather than an environment, use the dry adiabat up to the LCL and the saturated adiabat above it.'
+});
+
+card('thermo', {
+  title:'Lifting condensation level &amp; cloud base',
+  span:true,
+  cols:true,
+  fields:[
+    {id:'t',  label:'Temperature °C', type:'num', val:30, step:0.1},
+    {id:'td', label:'Dewpoint °C',    type:'num', val:20, step:0.1},
+    {id:'p',  label:'Surface pressure hPa', type:'num', val:1013.25, step:0.1}
+  ],
+  compute(v){
+    const tK  = v.t+273.15, tdK = v.td+273.15;
+    const rh  = M.rhFromDewpoint(v.t, v.td);
+    const espy= M.lclEspy(v.t, v.td);
+    const romps=M.lclRomps(v.p*100, tK, Math.min(rh,100)/100);
+    const pL  = M.lclStullPressure(v.p, tK, tdK);
+    const TL  = M.boltonTL(tK, M.esBolton(v.td));
+    const dPct= isFinite(romps)&&romps>1 ? (espy-romps)/romps*100 : NaN;
+    return {rows: rowsOf([
+      ['LCL — Romps (2017) exact', N(romps,0), 'm', 'hero'],
+      ['LCL — Espy rule of thumb', N(espy,0), 'm', 'hero'],
+      ['difference', N(espy-romps,0)+' m', isFinite(dPct)?'('+N(dPct,1)+'%)':'', 'dim'],
+      ['LCL pressure (Stull)', N(pL,1), 'hPa'],
+      ['temperature at the LCL (Bolton)', N(TL-273.15,2), '°C'],
+      ['relative humidity', N(rh,1), '%', 'dim'],
+      ['dewpoint depression', N(v.t-v.td,2), 'K', 'dim'],
+      ['cloud base above ground', N(romps,0), 'm', 'dim'],
+      ['cloud base', N(romps/0.3048,0), 'ft', 'dim']
+    ]),
+    flag:'The LCL is a good cloud base estimate for <b>cumuliform</b> clouds under forced ascent — it does not apply to stratiform cloud, whose base is set by advection. Espy’s rule is stated as accurate to about ±2% for RH 50-100% and 0-30 °C; against the exact solution it drifts to roughly 5% at the hot, humid corner, which is where the LCL is lowest.'};
+  },
+  src:'<b>Romps (2017)</b>, <i>J. Atmos. Sci.</i> <b>74</b>, 3891-3900 — an analytically exact LCL, solved here with the lower (−1) branch of the Lambert W function via Halley iteration. Residual uncertainty ≤ 5 m, and that is the uncertainty of the vapour-pressure measurements, not of the formula. Espy’s rule z ≈ 125(T − T<sub>d</sub>) m per Lawrence (2005); the 125 m/K coefficient is 1/(&Gamma;<sub>d</sub> − &Gamma;<sub>dewpoint</sub>) ≈ 1/(9.8 − 1.8) K/km.'
+});
+
+function band(x, list){ for(const b of list) if(x>=b[0]) return b[1]; return list[list.length-1][1]; }
+const LI_B  = [[0,'stable'],[-3,'marginally unstable'],[-6,'moderately unstable'],[-9,'very unstable'],[-1e9,'extremely unstable']];
+const SSI_B = [[0,'stable'],[-3,'moderately unstable'],[-6,'very unstable'],[-1e9,'extremely unstable']];
+const KI_B  = [[40,'high potential'],[26,'moderate potential'],[15,'small potential'],[-1e9,'convection not likely']];
+const TT_B  = [[56,'scattered severe'],[53,'widely scattered severe'],[51,'isolated severe'],[44,'convection likely'],[-1e9,'convection not likely']];
+const SW_B  = [[400,'severe, tornadoes possible'],[300,'severe possible'],[-1e9,'non-severe']];
+
+card('thermo', {
+  title:'Stability indices',
+  span:true,
+  fields:[
+    {id:'ps',   label:'Surface hPa',   type:'num', val:1000, step:1},
+    {id:'ts',   label:'Surface T °C',  type:'num', val:31,  step:0.1},
+    {id:'tds',  label:'Sfc T<sub>d</sub> °C', type:'num', val:24, step:0.1},
+    {id:'t85',  label:'850 T °C',      type:'num', val:20,  step:0.1},
+    {id:'td85', label:'850 T<sub>d</sub> °C', type:'num', val:17, step:0.1},
+    {id:'t70',  label:'700 T °C',      type:'num', val:9,   step:0.1},
+    {id:'td70', label:'700 T<sub>d</sub> °C', type:'num', val:2, step:0.1},
+    {id:'t50',  label:'500 T °C',      type:'num', val:-9,  step:0.1},
+    {id:'f85',  label:'850 wind kt',   type:'num', val:25,  step:1},
+    {id:'d85',  label:'850 dir °',     type:'num', val:200, step:5},
+    {id:'f50',  label:'500 wind kt',   type:'num', val:40,  step:1},
+    {id:'d50',  label:'500 dir °',     type:'num', val:250, step:5}
+  ],
+  compute(v){
+    const li  = M.liftedIndex(v.ps, v.ts, v.tds, v.t50);
+    const ssi = M.showalter(v.t85, v.td85, v.t50);
+    const ki  = M.kIndex(v.t85, v.td85, v.t70, v.td70, v.t50);
+    const tt  = M.totalTotals(v.t85, v.td85, v.t50);
+    const vt  = M.verticalTotals(v.t85, v.t50);
+    const ct  = M.crossTotals(v.td85, v.t50);
+    const sw  = M.sweat(v.td85, tt, v.f85, v.f50, v.d85, v.d50);
+    const veer = v.d50 - v.d85;
+    const shearOn = v.d85>=130 && v.d85<=250 && v.d50>=210 && v.d50<=310 && veer>0 && v.f85>=15 && v.f50>=15;
+    const r = (k,val,d,b)=>'<tr><td>'+k+'</td><td class="num">'+N(val,d)+'</td><td>'+b+'</td></tr>';
+    return {
+      html:'<div class="scroll"><table><thead><tr><th>Index</th><th class="num">Value</th><th>Interpretation</th></tr></thead><tbody>'+
+        r('Lifted Index (surface parcel)', li, 1, band(li,LI_B))+
+        r('Showalter Stability Index', ssi, 1, band(ssi,SSI_B))+
+        r('K-Index', ki, 1, band(ki,KI_B))+
+        r('Total Totals', tt, 1, band(tt,TT_B))+
+        r('&nbsp;&nbsp;Vertical Totals', vt, 1, '')+
+        r('&nbsp;&nbsp;Cross Totals', ct, 1, '')+
+        r('SWEAT', sw, 0, band(sw,SW_B))+
+        '</tbody></table></div>'+
+        '<div class="r dim"><span class="k">SWEAT shear term</span><span class="v">'+(shearOn?'active':'zeroed')+'</span><span class="u"></span></div>'+
+        '<div class="r dim"><span class="k">SWEAT Total Totals term</span><span class="v">'+(tt<49?'zeroed (TT &lt; 49)':'active')+'</span><span class="u"></span></div>',
+      flag:'Lifted Index here uses a <b>surface</b> parcel, lifted dry-adiabatically to its LCL and then along a saturated adiabat integrated by RK4 to 500 hPa. Operational LI uses the mean of the lowest 50 hPa, so a surface observation that is unrepresentative (a hot asphalt reading, a shallow moist layer) will make this too unstable. K-Index favours non-severe air-mass convection; SSI ignores the surface layer entirely, which makes it robust under a shallow cold front but blind to surface-based instability.'
+    };
+  },
+  src:'Definitions and interpretation thresholds from NOAA/NWS and SPC. SWEAT = 12T<sub>d850</sub> + 20(TT − 49) + 2f<sub>850</sub> + f<sub>500</sub> + 125(S + 0.2), with T<sub>d850</sub> clamped at 0, the TT term zeroed if TT &lt; 49, and the shear term zeroed unless 850 dir is 130-250°, 500 dir is 210-310°, the wind veers, and both speeds are ≥ 15 kt. NWS publishes several different threshold tables for these indices; the bands shown follow NWS Louisville (LI, SSI) and the NWS Skew-T parameter page (KI, TT, SWEAT).'
+});
+
+/* =================================================================
+   REFERENCE
+   ================================================================= */
+const tbl = (head, rows, tight) =>
+  '<div class="scroll'+(tight?' tight':'')+'"><table><thead><tr>'+head.map(h=>'<th'+(h[1]?' class="num"':'')+'>'+h[0]+'</th>').join('')+
+  '</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,i)=>'<td'+(head[i]&&head[i][1]?' class="num"':'')+'>'+c+'</td>').join('')+'</tr>').join('')+
+  '</tbody></table></div>';
+
+card('ref', {
+  title:'Operational averaging periods by agency',
+  span:true,
+  compute(){ return {html: tbl(
+    [['Agency'],['Basin'],['Averaging period'],['Confirmed from']],
+    [['NHC / CPHC','N Atlantic, E &amp; C Pacific','<b>1-minute</b> at 10 m','NHC Glossary'],
+     ['JTWC','W Pacific, Indian Ocean, S Hemisphere','<b>1-minute</b> at 10 m','JTWC best-track documentation'],
+     ['JMA / RSMC Tokyo','NW Pacific','<b>10-minute</b>','JMA RSMC advisory notes'],
+     ['BOM','Australian region','<b>10-minute</b> mean + 3-s gust','WMO IWTC-VII, not BOM directly'],
+     ['RSMC La Réunion','SW Indian Ocean','<b>10-minute</b>','WMO IWTC-VII'],
+     ['PAGASA','Philippine AoR','10-minute <span class="chip w">inferred</span>','Not stated on any PAGASA page; matches Typhoon Committee thresholds exactly'],
+     ['IMD','N Indian Ocean','3-minute <span class="chip w">unverified</span>','Widely reported, not confirmed from IMD'],
+     ['CMA','NW Pacific','2-minute <span class="chip w">unverified</span>','Not confirmed from any reachable source']]
+  )}; },
+  src:'JTWC states the operational discrepancy in the reciprocal direction: “One-minute mean wind speeds are generally higher than ten-minute mean wind speeds by 14%” — that is 1/0.88, the legacy factor, not the 0.93 WMO now recommends.'
+});
+
+card('ref', {
+  title:'WMO Table 1.2 — agency V<sub>max</sub> conversion',
+  span:true,
+  compute(){ return {html: tbl(
+    [['Exposure'],['K (1-min → 10-min)',1],['1/K (10-min → 1-min)',1]],
+    M.EXPOSURES.map(e=>[M.EXPOSURE_LABEL[e], M.K_VMAX[e].toFixed(2), (1/M.K_VMAX[e]).toFixed(3)])
+      .concat([['<i>Legacy “traditional” value</i>','0.88','1.136']]), true
+  ) + '<div class="rule">Use <b>K = 0.93</b> (at-sea) for basin-scale intensity comparison between NHC/JTWC and the 10-minute agencies. WMO found the traditional 0.88 corresponds more closely to an <b>off-land</b> exposure, meaning current practice has underestimated the at-sea 10-minute V<sub>max</sub> by about 5%.</div>'}; },
+  src:'WMO/TD-No. 1555, Table 1.2. These are for peak <b>storm intensity</b> estimates, where the “1-minute sustained” value is itself already a peak sampled over a longer, non-stationary window. They are not the reciprocal of the gust-factor table.'
+});
+
+card('ref', {
+  title:'WMO Table 1.1 — gust factors G(&tau;, T₀)',
+  span:true,
+  compute(){
+    const taus = [3,60,120,180,600];
+    const rows = [];
+    for(const T0 of [3600,600,180,120,60]){
+      for(let i=0;i<4;i++){
+        rows.push([
+          i===0 ? '<b>T₀ = '+(T0/60)+' min</b>' : '',
+          M.EXPOSURE_LABEL[M.EXPOSURES[i]].replace(/ \(.*\)/,''),
+          ...taus.map(t=>{ const g=M.gustFactor(t,T0,M.EXPOSURES[i]); return isFinite(g)?g.toFixed(2):'—'; })
+        ]);
+      }
+    }
+    return {html: tbl(
+      [['Reference'],['Exposure'],['&tau; = 3 s',1],['60 s',1],['120 s',1],['180 s',1],['600 s',1]], rows, true)};
+  },
+  src:'WMO/TD-No. 1555, Table 1.1, at +10 m. Exposure classes: At-Sea &gt; 20 km offshore; Off-Sea onshore wind at a coastline; Off-Land offshore wind at a coastline; In-Land roughly open terrain (z₀ ≈ 0.1-0.25 m — <b>not</b> urban, which is outside the table’s scope).'
+});
+
+card('ref', {
+  title:'Beaufort wind force scale',
+  span:true,
+  compute(){ return {html: tbl(
+    [['Force',1],['Descriptor'],['knots',1],['m/s',1],['km/h',1],['Sea state']],
+    M.BEAUFORT.map(b=>{
+      const hi = isFinite(b.hiKt) ? b.hiKt : null;
+      const rng = (a,u)=> hi===null ? '≥ '+N(M.speedTo(b.loKt,'kt',u), u==='ms'?1:0)
+                        : (b.f===0 ? '&lt; '+N(M.speedTo(1,'kt',u), u==='ms'?1:0)
+                                   : N(M.speedTo(b.loKt,'kt',u),u==='ms'?1:0)+'–'+N(M.speedTo(hi,'kt',u),u==='ms'?1:0));
+      return ['<b>'+b.f+'</b>', b.name,
+        hi===null?'≥ 64':(b.f===0?'&lt; 1':b.loKt+'–'+hi),
+        rng(0,'ms'), rng(0,'kmh'), '<span style="font-size:11.5px">'+b.sea+'</span>'];
+    })
+  )}; },
+  src:'WMO scale, equivalent wind at the standard height of 10 m over open flat terrain, as <b>mean</b> wind and not gusts. The relation v = 0.836·B<sup>1.5</sup> m/s is a curve fit to this table, not an official definition — it lands near the top of each band, so classify from the table.'
+});
+
+card('ref', {
+  title:'Tropical cyclone scale thresholds',
+  span:true,
+  compute(){
+    const rows = [];
+    for(const s of M.TC_SCALES){
+      s.bands.forEach((b,i)=>{
+        const nxt = s.bands[i+1];
+        rows.push([
+          i===0 ? '<b>'+s.name+'</b><br><span class="chip">'+(s.avg/60)+'-min</span>' : '',
+          b.name,
+          nxt ? b.lo+'–'+(nxt.lo-1) : '≥ '+b.lo,
+          nxt ? N(M.speedTo(b.lo,'kt','kmh'),0)+'–'+N(M.speedTo(nxt.lo-1,'kt','kmh'),0) : '≥ '+N(M.speedTo(b.lo,'kt','kmh'),0)
+        ]);
+      });
+    }
+    return {html: tbl([['Scale'],['Class'],['knots',1],['km/h',1]], rows, true)
+      + '<div class="rule">These scales use <b>different averaging periods</b> and are not directly comparable. A 10-minute 64 kt typhoon is roughly a 1-minute 69 kt system; convert with Table 1.2 before comparing.</div>'};
+  },
+  src:'PAGASA thresholds effective 23 March 2022. PAGASA prints the STS lower bound inconsistently (87 vs 89 km/h); the knot values are canonical here because they align exactly with the Typhoon Committee thresholds. BOM knot values are converted from its published km/h figures. IMD from the <i>Mausam</i> journal.'
+});
+
+card('ref', {
+  title:'Constants in use',
+  span:true,
+  compute(){ return {html: tbl(
+    [['Symbol'],['Value',1],['Units'],['Basis']],
+    [['g₀', M.G0.toFixed(5), 'm/s²', 'Exact, CODATA standard gravity'],
+     ['R<sub>d</sub>', M.RD.toFixed(5), 'J/kg/K', 'ISA basis: 8314.32 / 28.964420 (ISO 2533)'],
+     ['R<sub>v</sub>', M.RV.toFixed(4), 'J/kg/K', 'Derived as R<sub>d</sub>/&epsilon; so &epsilon; = R<sub>d</sub>/R<sub>v</sub> holds exactly'],
+     ['&epsilon;', M.EPS.toFixed(7), '—', 'M<sub>v</sub>/M<sub>d</sub> = 18.01528 / 28.964420'],
+     ['c<sub>pd</sub>', M.CPD.toFixed(2), 'J/kg/K', 'Dry air at constant pressure'],
+     ['&kappa; = R<sub>d</sub>/c<sub>pd</sub>', (2/7).toFixed(6), '—', '2/7, ideal diatomic gas'],
+     ['&kappa; (Bolton)', M.KAPPA_B.toFixed(4), '—', '0.2854 — Bolton’s coefficients are fitted to this'],
+     ['p₀', M.P0.toFixed(2), 'hPa', 'ISA sea level'],
+     ['T₀', M.T0K.toFixed(2), 'K', 'ISA sea level, 15 °C'],
+     ['&rho;₀', M.RHO0.toFixed(3), 'kg/m³', 'ISA sea level'],
+     ['L', (M.LAPSE*1000).toFixed(1), 'K/km', 'ISA troposphere'],
+     ['g₀/(R·L)', M.NEXP.toFixed(7), '—', 'ISA barometric exponent'],
+     ['r₀', M.R_E.toLocaleString('en-US'), 'm', 'ISO 2533 nominal earth radius — not the physical radius'],
+     ['1 inHg', M.INHG.toFixed(11), 'hPa', 'Exact: 13595.1 kg/m³ × g₀ × 0.0254 m'],
+     ['1 kt', M.KT.toFixed(10)+'…', 'm/s', 'Exact as 463/900 (nmi = 1852 m)']]
+  ) + '<div class="rule">One basis throughout, not a mix. The ISA is frozen at R* = 8314.32 rather than the modern CODATA 8314.4626, so ISA results here match published ISA tables. R<sub>v</sub> is then derived from R<sub>d</sub> and &epsilon; rather than taken from CODATA, which keeps &epsilon; = R<sub>d</sub>/R<sub>v</sub> exact at the cost of 1.7×10⁻⁵ relative difference from the CODATA R<sub>v</sub>.</div>'}; },
+  src:'Mixing constant bases is the classic silent error: R<sub>d</sub> = 287.05287 (ISA) and 287.058 (CODATA) differ by 1.8×10⁻⁵, which is irrelevant to the weather but will make an ISA table disagree in the last digit.'
+});
+
+card('ref', {
+  title:'What is not verified',
+  span:true,
+  compute(){ return {html:
+    '<div class="prose" style="max-width:none">'+
+    '<p>Everything in this tool was checked against a primary or official source except the items below. '+
+    'They are listed rather than quietly smoothed over, because a calculator that hides its weak points is worse than one that names them.</p>'+
+    tbl([['Item'],['Status']],
+    [['The 0.88 gust factor attributed to “Atkinson (1974)”','WMO/TD-1555 never cites a 1974 Atkinson paper — only Atkinson &amp; Holliday (1977) — and calls 0.88 merely “traditional”. This tool labels it <b>legacy</b>, with no year.'],
+     ['A numerical ± band on WMO Tables 1.1 and 1.2','None is published. WMO gives only qualitative statements about scatter, plus one case study (TC Orson, 1989) with s.d. 0.067-0.097 on factors of 1.1-1.24.'],
+     ['PAGASA averaging period','Not stated on any PAGASA page. 10-minute is the Typhoon Committee regional standard and PAGASA’s thresholds match exactly, but this is inference.'],
+     ['IMD 3-minute and CMA 2-minute periods','Widely repeated, not confirmed from IMD- or CMA-published material.'],
+     ['Knaff &amp; Zehr eq. 8 (wind from pressure)','The printed sign on the 0.518&Delta;P term does not round-trip against their eq. 7. This tool inverts eq. 7 numerically instead, sidestepping the ambiguity.'],
+     ['WMO eq. 3.1 constant K<sub>p</sub> = 0.0148275','Does not equal g<sub>n</sub>/(R·ln10) = 0.0148370 as the identity of eqs. 3.1 and 3.2 requires — a 0.064% discrepancy. The exponential eq. 3.2 is used here.'],
+     ['NWS station-pressure ↔ altimeter-setting pair','Not exact inverses: the 0.3 hPa term is dropped in one direction, about 8 ft.'],
+     ['Bolton eq. numbering for the dewpoint LCL form','Sources label it eq. 15 or eq. 21. The formulas themselves are verified; only the label is uncertain.'],
+     ['QNE','Not a genuine ICAO Q-code, and two incompatible usages circulate: the 1013.25 hPa <i>setting</i>, and the <i>indicated altitude</i> with that setting on the ground.'],
+     ['ISO 2533 and US Std Atm 1976 primary PDFs','Not read directly (host restrictions). Constants confirmed via three independent sources that agree exactly.'],
+     ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
+    '</div>'};
+  },
+  src:'The calculation engine ships with 123 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+});
+
+/* =================================================================
+   SHELL
+   ================================================================= */
+const nav = document.getElementById('nav');
+nav.innerHTML = MODULES.map(m=>'<a href="#'+m.id+'" data-m="'+m.id+'">'+m.label+'</a>').join('');
+
+function show(id){
+  if(!MODULES.some(m=>m.id===id)) id = MODULES[0].id;
+  MODULES.forEach(m=>{
+    document.getElementById('m-'+m.id).classList.toggle('on', m.id===id);
+  });
+  nav.querySelectorAll('a').forEach(a=>a.classList.toggle('on', a.dataset.m===id));
+  store.set('mod', id);
+  document.querySelector('main').scrollTop = 0;
+}
+nav.addEventListener('click', e=>{
+  const a = e.target.closest('a'); if(!a) return;
+  e.preventDefault(); location.hash = a.dataset.m; show(a.dataset.m);
+});
+window.addEventListener('hashchange', ()=>show(location.hash.slice(1)));
+show(location.hash.slice(1) || store.get('mod','wind'));
+
+const themeBtn = document.getElementById('themeBtn');
+const THEMES = ['auto','light','dark'];
+let theme = store.get('theme','auto');
+function applyTheme(){
+  if(theme==='auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
+  themeBtn.textContent = 'Theme: '+theme;
+  store.set('theme', theme);
+}
+themeBtn.addEventListener('click', ()=>{
+  theme = THEMES[(THEMES.indexOf(theme)+1) % THEMES.length]; applyTheme();
+});
+applyTheme();
+
+const off = document.getElementById('offline');
+function netState(){
+  off.textContent = navigator.onLine ? 'Runs offline' : 'Offline — still working';
+}
+window.addEventListener('online', netState);
+window.addEventListener('offline', netState);
+netState();
+})();
+
+</script>
+
+</body>
+</html>

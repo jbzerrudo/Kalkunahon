@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "MeteoCalc: an offline meteorological calculator"
+message: "If you use this software, please cite it using these metadata."
+type: software
+authors:
+  - given-names: Jef
+    family-names: Zerrudo
+    email: jbzerrudo@alum.up.edu.ph
+    alias: jbzerrudo
+repository-code: "https://github.com/jbzerrudo/MeteoCalc"
+url: "https://jbzerrudo.github.io/MeteoCalc/"
+abstract: >-
+  A single-file, offline browser calculator for meteorological conversions and
+  derived quantities: wind speed units and Beaufort force, WMO tropical cyclone
+  wind averaging period conversion, gust factors, TC intensity scale comparison,
+  pressure-wind relationships, humidity and comfort indices, standard atmosphere
+  and altimetry, and parcel thermodynamics and stability indices. Each result
+  carries the published source it derives from.
+keywords:
+  - meteorology
+  - tropical cyclone
+  - psychrometrics
+  - standard atmosphere
+  - atmospheric thermodynamics
+  - education
+license: Apache-2.0
+version: 1.0.0
+date-released: "2026-08-23"
