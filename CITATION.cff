@@ -7,6 +7,13 @@ authors:
     family-names: Zerrudo
     email: jbzerrudo@pagasa.dost.gov.ph
     alias: jbzerrudo
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22070323
+    description: Concept DOI, always resolves to the latest version
+  - type: doi
+    value: 10.5281/zenodo.22070324
+    description: DOI for version 1.0.0
 repository-code: "https://github.com/jbzerrudo/MeteoCalc"
 url: "https://jbzerrudo.github.io/MeteoCalc/"
 abstract: >-
@@ -26,3 +33,4 @@ keywords:
 license: PolyForm-Noncommercial-1.0.0
 version: 1.0.0
 date-released: "2026-08-23"
+doi: 10.5281/zenodo.22070323

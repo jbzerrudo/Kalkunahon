@@ -1,5 +1,8 @@
 # MeteoCalc
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22070323.svg)](https://doi.org/10.5281/zenodo.22070323)
+[![Licence: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-05687A)](https://polyformproject.org/licenses/noncommercial/1.0.0/)
+
 An offline meteorological calculator. One HTML file, no install, no server, no network.
 Every result carries the published source it derives from, and values outside a formula's
 stated range are flagged rather than silently returned.
@@ -74,6 +77,32 @@ engine/core.js         the calculation engine, no dependencies
 engine/test.js         142 assertions against published values
 .nojekyll              stops GitHub Pages running Jekyll over the files
 ```
+
+## How to cite
+
+Archived on Zenodo, so it can be cited in a thesis or paper.
+
+**Concept DOI** [10.5281/zenodo.22070323](https://doi.org/10.5281/zenodo.22070323) always resolves
+to the latest version. Use it when you mean the tool in general.
+
+**Version DOI** [10.5281/zenodo.22070324](https://doi.org/10.5281/zenodo.22070324) points at v1.0.0
+specifically. Use it in a paper, so a reader gets the exact version you used.
+
+> Zerrudo, J. (2026). *MeteoCalc: an offline meteorological calculator* (version 1.0.0).
+> Zenodo. https://doi.org/10.5281/zenodo.22070324
+
+```bibtex
+@software{zerrudo_meteocalc_2026,
+  author  = {Zerrudo, Jef},
+  title   = {MeteoCalc: an offline meteorological calculator},
+  version = {1.0.0},
+  year    = {2026},
+  doi     = {10.5281/zenodo.22070324},
+  url     = {https://jbzerrudo.github.io/MeteoCalc/}
+}
+```
+
+GitHub's "Cite this repository" button reads `CITATION.cff` and will offer APA and BibTeX directly.
 
 ## Attribution
 
