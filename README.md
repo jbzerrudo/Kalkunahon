@@ -74,4 +74,21 @@ Google Fonts rather than bundled.
 
 ## Licence
 
-Apache-2.0. See `LICENSE`.
+[PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/). See `LICENSE`.
+
+Free to use, copy, modify and redistribute for any **noncommercial** purpose. The licence
+explicitly permits use by *"any charitable organization, educational institution, public research
+organization, public safety or health organization, environmental protection organization, or
+government institution ... regardless of the source of funding"*, so universities, students and
+national meteorological services are all clearly covered.
+
+Commercial use is reserved to the copyright holder.
+
+### Commercial licensing
+
+The licence above does not cover commercial use. To use MeteoCalc in paid client work, inside a
+product or service you sell, or in any other commercial setting, contact **Jef Zerrudo** at
+**jbzerrudo@alum.up.edu.ph** to arrange a licence.
+
+Note this is a **source-available** licence, not an open source one. The Open Source Definition
+forbids restricting fields of endeavour, so no OSI-approved licence can carve out commercial use.
