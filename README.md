@@ -88,7 +88,7 @@ Commercial use is reserved to the copyright holder.
 
 The licence above does not cover commercial use. To use MeteoCalc in paid client work, inside a
 product or service you sell, or in any other commercial setting, contact **Jef Zerrudo** at
-**jbzerrudo@alum.up.edu.ph** to arrange a licence.
+**jbzerrudo@pagasa.dost.gov.ph** to arrange a licence.
 
 Note this is a **source-available** licence, not an open source one. The Open Source Definition
 forbids restricting fields of endeavour, so no OSI-approved licence can carve out commercial use.

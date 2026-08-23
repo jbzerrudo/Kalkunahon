@@ -5,7 +5,7 @@ type: software
 authors:
   - given-names: Jef
     family-names: Zerrudo
-    email: jbzerrudo@alum.up.edu.ph
+    email: jbzerrudo@pagasa.dost.gov.ph
     alias: jbzerrudo
 repository-code: "https://github.com/jbzerrudo/MeteoCalc"
 url: "https://jbzerrudo.github.io/MeteoCalc/"
