@@ -736,6 +736,23 @@ function wbgtISO(tnw, tg, ta, solar){
   return solar ? 0.7*tnw + 0.2*tg + 0.1*ta : 0.7*tnw + 0.3*tg;
 }
 
+/* WBGT risk bands, Japan Ministry of the Environment, after the Japan Sports
+   Association guidebook. NOTE this is an EXERCISE scale. ISO 7243's own
+   occupational reference limits vary with metabolic rate and acclimatisation,
+   so a single band cannot serve both. */
+const WBGT_BANDS = [
+  {lo: 31,   name:'Danger',         note:'Exercise should be prohibited except in special cases; children’s exercise stopped.'},
+  {lo: 28,   name:'Severe warning', note:'Avoid heavy exercise and endurance events. Rest and hydration needed.'},
+  {lo: 25,   name:'Warning',        note:'Rest every 30 minutes during heavy exercise.'},
+  {lo: 21,   name:'Caution',        note:'Promote water replenishment during exercise.'},
+  {lo:-1e9,  name:'Almost safe',    note:'Appropriate water replenishment still necessary.'}
+];
+function wbgtBand(w){
+  if(!isFinite(w)) return null;
+  for(const b of WBGT_BANDS) if(w >= b.lo) return b;
+  return WBGT_BANDS[WBGT_BANDS.length-1];
+}
+
 /* UTCI thermal stress assessment scale, Broede et al. (2012). */
 const UTCI_BANDS = [
   {lo:  46, name:'extreme heat stress'},
@@ -975,7 +992,7 @@ const API = {
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
   absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
   humidex,apparentTempBOM,wbgtSimple,
-  utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,utciRangeIssues,
+  utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,WBGT_BANDS,wbgtBand,utciRangeIssues,
   PRESS,pressTo,isa,geometricToGeopotential,geopotentialToGeometric,
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
   thickness,meanTvFromThickness,airDensity,

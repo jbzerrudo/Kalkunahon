@@ -272,6 +272,13 @@ ok('Tmrt from globe 45C/Ta 32/v2', M.mrtFromGlobe(45,32,2), 71.52, 0.02, 'C');
 ok('stronger wind pulls Tmrt further from Tg',
    M.mrtFromGlobe(45,32,6) > M.mrtFromGlobe(45,32,1) ? 1:0, 1, 0);
 
+eq('WBGT band at 31.0',   M.wbgtBand(31.0).name, 'Danger');
+eq('WBGT band at 30.9',   M.wbgtBand(30.9).name, 'Severe warning');
+eq('WBGT band at 28.0',   M.wbgtBand(28.0).name, 'Severe warning');
+eq('WBGT band at 27.9',   M.wbgtBand(27.9).name, 'Warning');
+eq('WBGT band at 25.0',   M.wbgtBand(25.0).name, 'Warning');
+eq('WBGT band at 20.9',   M.wbgtBand(20.9).name, 'Almost safe');
+ok('WBGT band null for NaN', M.wbgtBand(NaN)===null?1:0, 1, 0);
 ok('ISO 7243 outdoor weights', M.wbgtISO(20,40,30,true),  0.7*20+0.2*40+0.1*30, 1e-12, 'C');
 ok('ISO 7243 indoor weights',  M.wbgtISO(20,40,30,false), 0.7*20+0.3*40,        1e-12, 'C');
 ok('ISO 7243 weights sum to 1 (outdoor)', 0.7+0.2+0.1, 1, 1e-12);

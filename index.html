@@ -401,6 +401,7 @@ tr:last-child td{border-bottom:0}
             <li>NWS / Environment and Climate Change Canada, 2001 wind chill temperature index.</li>
             <li>Bröde, P. et al., 2012: <i>Int J Biometeorol</i> <b>56</b>, 481-494 — the UTCI operational procedure, from COST Action 730.</li>
             <li>ISO 7243:2017 — WBGT. ISO 7726 — mean radiant temperature from a black globe.</li>
+            <li>Ministry of the Environment, Japan, <i>Heat Illness Prevention Information</i> — WBGT risk bands, after the Japan Sports Association guidebook (2019).</li>
             <li>Di Napoli, C., R. Hogan and F. Pappenberger, 2020: <i>Int J Biometeorol</i> <b>64</b>, 1233-1245 — mean radiant temperature in sun.</li>
             <li>Lu, Y.-C. and D.M. Romps, 2022: <i>J. Appl. Meteor. Climatol.</i> <b>61</b> — the extended heat index and the errors it corrects.</li>
             <li>ECCC Climate Normals technical documentation (humidex); Steadman / BOM apparent temperature.</li>
@@ -1160,6 +1161,23 @@ function wbgtISO(tnw, tg, ta, solar){
   return solar ? 0.7*tnw + 0.2*tg + 0.1*ta : 0.7*tnw + 0.3*tg;
 }
 
+/* WBGT risk bands, Japan Ministry of the Environment, after the Japan Sports
+   Association guidebook. NOTE this is an EXERCISE scale. ISO 7243's own
+   occupational reference limits vary with metabolic rate and acclimatisation,
+   so a single band cannot serve both. */
+const WBGT_BANDS = [
+  {lo: 31,   name:'Danger',         note:'Exercise should be prohibited except in special cases; children’s exercise stopped.'},
+  {lo: 28,   name:'Severe warning', note:'Avoid heavy exercise and endurance events. Rest and hydration needed.'},
+  {lo: 25,   name:'Warning',        note:'Rest every 30 minutes during heavy exercise.'},
+  {lo: 21,   name:'Caution',        note:'Promote water replenishment during exercise.'},
+  {lo:-1e9,  name:'Almost safe',    note:'Appropriate water replenishment still necessary.'}
+];
+function wbgtBand(w){
+  if(!isFinite(w)) return null;
+  for(const b of WBGT_BANDS) if(w >= b.lo) return b;
+  return WBGT_BANDS[WBGT_BANDS.length-1];
+}
+
 /* UTCI thermal stress assessment scale, Broede et al. (2012). */
 const UTCI_BANDS = [
   {lo:  46, name:'extreme heat stress'},
@@ -1399,7 +1417,7 @@ const API = {
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
   absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
   humidex,apparentTempBOM,wbgtSimple,
-  utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,utciRangeIssues,
+  utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,WBGT_BANDS,wbgtBand,utciRangeIssues,
   PRESS,pressTo,isa,geometricToGeopotential,geopotentialToGeometric,
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
   thickness,meanTvFromThickness,airDensity,
@@ -1820,6 +1838,12 @@ card('moist', {
   src:'Saturation vapour pressure: the <b>WMO/CIMO</b> Magnus pair, e<sub>s</sub> = 6.112·exp(17.62t/(243.12+t)) hPa over water (−45 to +60 °C) and 6.112·exp(22.46t/(272.62+t)) over ice (−65 to +0.01 °C), stated uncertainty under 0.6%. Both branches share the 6.112 prefactor, so they coincide exactly at 0 °C — pairing formulas from different sources puts a spurious step there. Invertible in closed form, so dewpoint round-trips exactly. Wet-bulb bisects e = e<sub>s</sub>(T<sub>w</sub>) − A·p·(1+0.00115T<sub>w</sub>)(T−T<sub>w</sub>), A = 6.60×10⁻⁴ K⁻¹ (AMS Glossary; FAO-56 Annex 3), on the <b>liquid</b> branch throughout — a bulb below 0 °C is supercooled until it freezes, and the frozen bulb is a different equilibrium, reported separately as the ice-bulb rather than switched into silently.'
 });
 
+const HI_BRANCH = {
+  'simple':             'Steadman simple form (below 80 °F)',
+  'rothfusz':           'Rothfusz regression',
+  'rothfusz+dry adj':   'Rothfusz + dry-air adjustment',
+  'rothfusz+humid adj': 'Rothfusz + humid adjustment'
+};
 function humidexBand(h){
   if(h<20) return 'no discomfort';
   if(h<30) return 'little to no discomfort';
@@ -1853,9 +1877,10 @@ card('moist', {
       ['humidex',           N(hx,1), '', 'hero'],
       ['apparent temp (shade)', N(at,1), '°C', 'hero'],
       ['WBGT (BOM approximation)', N(wb,1), '°C'],
+      ['  no risk band on this one', 'see the ISO 7243 card', '', 'dim txt'],
       ['wind chill',        wcOK?N(wc,1):'n/a', '°C', wcOK?'':'dim'],
       ['dewpoint',          N(td,1), '°C', 'dim'],
-      ['heat index branch', hi.branch, '', 'dim txt'],
+      ['formula used', HI_BRANCH[hi.branch] || hi.branch, '', 'dim txt'],
       ['humidex band',      humidexBand(hx), '', 'dim txt']
     ];
     let flag = null;
@@ -1962,8 +1987,11 @@ card('moist', {
     const w = M.wbgtISO(v.tnw, v.tg, v.t, solar);
     const tmrt = M.mrtFromGlobe(v.tg, v.t, Math.max(v.w,0), v.d);
     const rhApprox = M.rhFromDewpoint(v.t, Math.min(v.tnw, v.t));
+    const band = M.wbgtBand(w);
     const rows = [
       ['WBGT', N(w,2), '°C', 'hero'],
+      ['risk level, exercise', band ? band.name : '—', '', 'hero txt'],
+      ['guidance', band ? band.note : '—', '', 'dim txt'],
       ['formula', solar ? '0.7 Tnw + 0.2 Tg + 0.1 Ta' : '0.7 Tnw + 0.3 Tg', '', 'dim txt'],
       ['mean radiant temperature', N(tmrt,1), '°C', 'hero'],
       ['  T<sub>mrt</sub> − T<sub>a</sub>', (tmrt>v.t?'+':'')+N(tmrt-v.t,1), 'K', 'dim'],
@@ -1974,7 +2002,7 @@ card('moist', {
     let flag = null;
     if(v.tnw > v.t) flag = 'The natural wet bulb cannot exceed the air temperature. Check the readings.';
     else if(v.tg < v.t) flag = 'A globe reading below air temperature implies a net radiative <b>loss</b>, which happens under a clear night sky but not in sun. T<sub>mrt</sub> comes out below air temperature, which is correct for that case.';
-    else flag = 'ISO 7243 is a <b>screening</b> method for occupational heat stress over a working day of up to 8 hours, for healthy adults. It is not a public comfort index, and it does not apply to brief exposures.';
+    else flag = '<b>That risk level is an exercise scale, not a universal one.</b> It comes from Japan’s Ministry of the Environment, after the Japan Sports Association, and assumes physical activity. ISO 7243’s own occupational limits are not a single scale at all: they vary with metabolic rate, acclimatisation and clothing, so the same WBGT is acceptable for light seated work and unacceptable for heavy labour. ISO 7243 is a <b>screening</b> method for exposure over a working day of up to 8 hours, for healthy adults, and does not apply to brief exposures.';
     return {rows: rowsOf(rows), flag: flag};
   },
   src:'<b>ISO 7243:2017</b>, <i>Ergonomics of the thermal environment — Assessment of heat stress using the WBGT index</i>. Weights confirmed numerically against a reference implementation. Mean radiant temperature from the globe by the <b>ISO 7726</b> forced-convection relation, T<sub>mrt</sub> = [T<sub>g</sub>⁴ + (1.1×10⁸·v<sup>0.6</sup>)/(ε·D<sup>0.4</sup>)·(T<sub>g</sub> − T<sub>a</sub>)]<sup>1/4</sup>, with ε = 0.95 and the wind scaled from 10 m down to globe height by the log law, as ECMWF’s thermofeel does it. The UTCI row is a convenience: a globe reading is exactly what UTCI’s missing fourth input needs. WBGT has been Japan’s national heat-illness index since 2006 and NWS recommends it over the heat index for vigorous activity in full sun.'
