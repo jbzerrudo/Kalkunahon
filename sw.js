@@ -2,7 +2,7 @@
    Bump VERSION whenever you ship a new build, so old caches are discarded.
    Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/MeteoCalc)
    PolyForm Noncommercial License 1.0.0 */
-const VERSION = 'meteocalc-v3';
+const VERSION = 'meteocalc-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
