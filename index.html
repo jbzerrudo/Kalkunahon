@@ -1570,7 +1570,7 @@ card('wind', {
       html:'<div class="scroll"><table><thead><tr><th>Scale</th><th class="num">kt</th><th class="num">km/h</th><th>Classification</th><th>Conversion</th></tr></thead><tbody>'+body+'</tbody></table></div>',
       flag: unverified
         ? 'IMD uses a 3-minute averaging period, for which WMO/TD-1555 Table 1.2 publishes no agency conversion factor — that row shows the wind unconverted and is <b>not comparable</b>. IMD’s averaging period could not be confirmed from an IMD-published source.'
-        : 'Each scale is evaluated at its own native averaging period, with WMO Table 1.2 applied where the input period differs. PAGASA’s averaging period is inferred from Typhoon Committee practice; PAGASA does not state it directly.'
+        : 'Each scale is evaluated at its own native averaging period, with WMO Table 1.2 applied where the input period differs. PAGASA uses a 10-minute averaging period following WMO guidance, confirmed from inside the agency, though it is not stated on PAGASA’s public pages.'
     };
   },
   src:'Thresholds: NHC (Saffir-Simpson, 1-min); WMO TCP-23 and JMA (10-min); PAGASA, effective 23 March 2022 (knot values are canonical — PAGASA’s published km/h figures are internally inconsistent at the STS boundary); BOM; IMD (<i>Mausam</i>).'
@@ -2307,7 +2307,7 @@ card('ref', {
      ['JMA / RSMC Tokyo','NW Pacific','<b>10-minute</b>','JMA RSMC advisory notes'],
      ['BOM','Australian region','<b>10-minute</b> mean + 3-s gust','WMO IWTC-VII, not BOM directly'],
      ['RSMC La Réunion','SW Indian Ocean','<b>10-minute</b>','WMO IWTC-VII'],
-     ['PAGASA','Philippine AoR','10-minute <span class="chip w">inferred</span>','Not stated on any PAGASA page; matches Typhoon Committee thresholds exactly'],
+     ['PAGASA','Philippine AoR','<b>10-minute</b>','PAGASA operational practice, following WMO guidance. Not stated on PAGASA’s public pages, so a reader cannot confirm it from the website alone.'],
      ['IMD','N Indian Ocean','3-minute <span class="chip w">unverified</span>','Widely reported, not confirmed from IMD'],
      ['CMA','NW Pacific','2-minute <span class="chip w">unverified</span>','Not confirmed from any reachable source']]
   )}; },
@@ -2420,7 +2420,6 @@ card('ref', {
     tbl([['Item'],['Status']],
     [['The 0.88 gust factor attributed to “Atkinson (1974)”','WMO/TD-1555 never cites a 1974 Atkinson paper — only Atkinson &amp; Holliday (1977) — and calls 0.88 merely “traditional”. This tool labels it <b>legacy</b>, with no year.'],
      ['A numerical ± band on WMO Tables 1.1 and 1.2','None is published. WMO gives only qualitative statements about scatter, plus one case study (TC Orson, 1989) with s.d. 0.067-0.097 on factors of 1.1-1.24.'],
-     ['PAGASA averaging period','Not stated on any PAGASA page. 10-minute is the Typhoon Committee regional standard and PAGASA’s thresholds match exactly, but this is inference.'],
      ['IMD 3-minute and CMA 2-minute periods','Widely repeated, not confirmed from IMD- or CMA-published material.'],
      ['Knaff &amp; Zehr eq. 8 (wind from pressure)','The printed sign on the 0.518&Delta;P term does not round-trip against their eq. 7. This tool inverts eq. 7 numerically instead, sidestepping the ambiguity.'],
      ['WMO eq. 3.1 constant K<sub>p</sub> = 0.0148275','Does not equal g<sub>n</sub>/(R·ln10) = 0.0148370 as the identity of eqs. 3.1 and 3.2 requires — a 0.064% discrepancy. The exponential eq. 3.2 is used here.'],

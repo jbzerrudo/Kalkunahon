@@ -3,7 +3,8 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22070323.svg)](https://doi.org/10.5281/zenodo.22070323)
 [![Licence: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-05687A)](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
-An offline meteorological calculator. One HTML file, no install, no server, no network.
+An offline meteorological calculator. The published build is a single HTML file: no install,
+no server, no network.
 Every result carries the published source it derives from, and values outside a formula's
 stated range are flagged rather than silently returned.
 
@@ -74,7 +75,7 @@ icon-192.png           required for the install prompt
 icon-512.png           required for the install prompt
 sw.js                  service worker, so the installed app works with no connection
 engine/core.js         the calculation engine, no dependencies
-engine/test.js         142 assertions against published values
+engine/test.js         169 assertions against published values
 .nojekyll              stops GitHub Pages running Jekyll over the files
 ```
 
