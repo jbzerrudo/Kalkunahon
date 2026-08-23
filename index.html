@@ -1456,7 +1456,9 @@ function card(mod, spec){
         html += '<select id="'+id+'">'+f.opts.map(o=>
           '<option value="'+esc(o[0])+'"'+(o[0]===f.val?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
       } else {
-        html += '<input type="number" id="'+id+'" value="'+f.val+'"'
+        html += '<input type="number" id="'+id+'"'
+             + (f.val === '' ? '' : ' value="'+f.val+'"')
+             + (f.ph ? ' placeholder="'+esc(f.ph)+'"' : '')
              + (f.step!=null?' step="'+f.step+'"':' step="any"')
              + (f.min!=null?' min="'+f.min+'"':'')
              + (f.max!=null?' max="'+f.max+'"':'') + '>';
@@ -1877,11 +1879,20 @@ card('moist', {
       opts:[['ta','I do not have it — assume shade, overcast or night'],
             ['globe','I have a black-globe thermometer reading'],
             ['val','I already know Tmrt (from a model or ERA5-HEAT)']]},
-    {id:'tval', label:'not needed', type:'num', val:45, step:0.1}
+    {id:'tval', label:'not needed', type:'num', val:'', ph:'your reading', step:0.1}
   ],
   rule:'UTCI is an <b>equivalent temperature</b>: the air temperature of a reference environment that would put the same physiological strain on the body. Underneath is a 187-node thermophysiological model with clothing that adapts to conditions, not a curve fitted to a table. It takes four inputs, and the fourth one, radiation, is the reason it works in sun as well as shade.',
   compute(v){
     const LBL = {ta:'not needed in this mode', globe:'Globe thermometer reads °C', val:'T<sub>mrt</sub> value °C'};
+    if(v.tmode !== 'ta' && !isFinite(v.tval)){
+      return {
+        rows: rowsOf([['UTCI','—','', 'hero'], ['thermal stress','waiting for your reading','', 'hero txt']]),
+        labels: {tval: LBL[v.tmode]}, disable: {tval: false},
+        flag: v.tmode === 'globe'
+          ? 'Enter the temperature your black-globe thermometer is reading. Nothing is assumed until you do.'
+          : 'Enter the mean radiant temperature you have, for example from a model or from Copernicus ERA5-HEAT. Nothing is assumed until you do.'
+      };
+    }
     let tmrt, how;
     if(v.tmode === 'ta'){ tmrt = v.t; how = 'set equal to air temperature'; }
     else if(v.tmode === 'globe'){
@@ -1895,7 +1906,7 @@ card('moist', {
     const shadeU = M.utci(v.t, v.t, wUsed, v.rh);
 
     const rows = [
-      ['UTCI', N(u,1), '°C', 'hero'],
+      [v.tmode === 'ta' ? 'UTCI in shade' : 'UTCI', N(u,1), '°C', 'hero'],
       ['thermal stress', M.utciCategory(u) || '—', '', 'hero txt'],
       ['offset from air temperature', (u>v.t?'+':'')+N(u-v.t,1), 'K'],
       ['mean radiant temperature', N(tmrt,1), '°C'],
@@ -1907,13 +1918,22 @@ card('moist', {
     if(v.tmode !== 'ta'){
       rows.push(['same conditions in full shade', N(shadeU,1), '°C', 'dim']);
       rows.push(['radiation is worth', (u>shadeU?'+':'')+N(u-shadeU,1), 'K', 'dim']);
+    } else {
+      // No instrument: show the two defensible endpoints instead of one shade
+      // figure presented as the answer. Both bounds are sourced.
+      const sunU = M.utci(v.t, v.t + 30, wUsed, v.rh);
+      rows.splice(2, 0,
+        ['UTCI in strong sun', N(sunU,1), '°C', 'hero'],
+        ['thermal stress in sun', M.utciCategory(sunU) || '—', '', 'hero txt']);
+      rows.push(['what the sun is worth here', '+'+N(sunU-u,1), 'K', 'dim']);
+      rows.push(['sun bound assumes', 'T<sub>mrt</sub> = T<sub>a</sub> + 30 K', '', 'dim txt']);
     }
     let flag = null;
     if(issues.length){
       flag = '<b>Outside the published validity domain:</b> ' + issues.join('; ') +
              '. The polynomial was fitted only within that grid, so this number is an extrapolation.';
     } else if(v.tmode === 'ta'){
-      flag = '<b>UTCI needs four inputs and you have supplied three.</b> T<sub>mrt</sub> is set equal to the air temperature, which is the UTCI <i>reference</i> radiation condition and physically means full shade, overcast, or night. <b>In direct sun this understates heat stress.</b> T<sub>mrt</sub> can run up to 30 K above air temperature in sunny conditions, worth roughly 7 to 9 °C of UTCI, which is enough to move the reading a whole stress category.';
+      flag = '<b>Without a radiation measurement, your true UTCI lies between these two figures.</b> The lower one sets T<sub>mrt</sub> equal to air temperature, which is the UTCI <i>reference</i> condition and means full shade, overcast, or night. The upper one uses T<sub>mrt</sub> = T<sub>a</sub> + 30 K, the strong-sun value reported by Di Napoli, Hogan &amp; Pappenberger (2020). In deep shade or under cloud you are near the bottom; in open sun near the top. Neither is a guess about your situation, so <b>read the one that matches where you are actually standing.</b>';
     }
     if(v.w < 0.5) flag = (flag ? flag + ' ' : '') +
       'Wind was raised to the UTCI minimum of 0.5 m/s; the procedure is not defined below that.';
@@ -1936,7 +1956,7 @@ card('moist', {
       opts:[['sun','Outdoors, globe in direct sun'],['shade','Indoors or no solar load']]},
     {id:'d',   label:'Globe diameter m', type:'num', val:0.15, step:0.01}
   ],
-  rule:'The <b>natural wet bulb</b> is an unaspirated wet bulb sitting in the ambient airflow. It is <b>not</b> the psychrometric wet bulb from the humidity solver, and it reads higher. Substituting one for the other underestimates WBGT, so this card asks for the measurement rather than inventing it.',
+  rule:'This card needs two instrument readings. The <b>natural wet bulb</b> is an unaspirated wet bulb sitting in the ambient airflow, <b>not</b> the psychrometric wet bulb from the humidity solver, and it reads higher. The <b>globe temperature</b> comes from a black sphere, standard diameter 150 mm. Substituting the psychrometric wet bulb underestimates WBGT, so this card asks for the measurements rather than inventing them.<br><br><b>No globe or wet bulb?</b> The comfort card above gives the BOM approximation from temperature and humidity alone. It is a reasonable screening figure, but it has no radiation or wind term at all, so it cannot tell sun from shade. For the radiation part specifically, the UTCI card brackets the answer between shade and strong sun without needing any instrument.',
   compute(v){
     const solar = v.exp === 'sun';
     const w = M.wbgtISO(v.tnw, v.tg, v.t, solar);
@@ -1958,6 +1978,61 @@ card('moist', {
     return {rows: rowsOf(rows), flag: flag};
   },
   src:'<b>ISO 7243:2017</b>, <i>Ergonomics of the thermal environment — Assessment of heat stress using the WBGT index</i>. Weights confirmed numerically against a reference implementation. Mean radiant temperature from the globe by the <b>ISO 7726</b> forced-convection relation, T<sub>mrt</sub> = [T<sub>g</sub>⁴ + (1.1×10⁸·v<sup>0.6</sup>)/(ε·D<sup>0.4</sup>)·(T<sub>g</sub> − T<sub>a</sub>)]<sup>1/4</sup>, with ε = 0.95 and the wind scaled from 10 m down to globe height by the log law, as ECMWF’s thermofeel does it. The UTCI row is a convenience: a globe reading is exactly what UTCI’s missing fourth input needs. WBGT has been Japan’s national heat-illness index since 2006 and NWS recommends it over the heat index for vigorous activity in full sun.'
+});
+
+card('moist', {
+  title:'Getting the radiant inputs',
+  span:true,
+  fields:[
+    {id:'t', label:'Air temperature °C', type:'num', val:32, step:0.1},
+    {id:'w', label:'Wind at 10 m m/s', type:'num', val:2, step:0.1},
+    {id:'rh',label:'Relative humidity %', type:'num', val:75, step:1}
+  ],
+  rule:'Two cards above need readings a normal weather station does not produce: <b>mean radiant temperature</b> and <b>natural wet bulb</b>. This card explains where they come from and shows what your own numbers would mean.',
+  compute(v){
+    const w = Math.max(v.w, 0.5);
+    const rows = [];
+    for(const tg of [v.t, v.t+3, v.t+6, v.t+9, v.t+12, v.t+15]){
+      const mrt = M.mrtFromGlobe(tg, v.t, w);
+      const u   = M.utci(v.t, mrt, w, v.rh);
+      rows.push('<tr><td class="num">'+N(tg,1)+'</td><td class="num">'+N(mrt,1)+
+        '</td><td class="num">+'+N(mrt-v.t,1)+'</td><td class="num">'+N(u,1)+
+        '</td><td>'+(M.utciCategory(u)||'—')+'</td></tr>');
+    }
+    const dias = [[0.15,'150 mm — the ISO standard'],[0.10,'100 mm'],[0.05,'50 mm — fast response'],[0.025,'25 mm — mini globe']];
+    const drow = dias.map(([d,lbl])=>{
+      const mrt = M.mrtFromGlobe(v.t+9, v.t, w, d);
+      return '<tr><td>'+lbl+'</td><td class="num">'+d+'</td><td class="num">'+N(mrt,1)+
+             '</td><td class="num">+'+N(mrt-v.t,1)+'</td></tr>';
+    }).join('');
+
+    return {html:
+      '<div class="prose" style="max-width:none">'+
+      '<h4>Mean radiant temperature: four ways to get it</h4>'+
+      '<p><b>1. Measure it with a black globe.</b> The reliable route. A black globe thermometer is ordinary WBGT equipment, and the UTCI card converts the reading for you by ISO 7726. This is what the first table below is about.</p>'+
+      '<p><b>2. Take it from a model.</b> Copernicus ERA5-HEAT publishes T<sub>mrt</sub> as a free gridded product, computed the way ECMWF does it. Best source for a location and time rather than a live reading.</p>'+
+      '<p><b>3. Assume it equals air temperature.</b> Honest, and it is the UTCI reference condition, but it specifically means full shade, overcast, or night. In sun it understates heat stress, which is why the UTCI card shows you both bounds instead of one number.</p>'+
+      '<p><b>4. Rules of thumb, used as a sanity check only.</b> Strong sun can put T<sub>mrt</sub> up to 30 K above air temperature (Di Napoli, Hogan &amp; Pappenberger 2020). A clear night sky puts it <i>below</i> air temperature, because the sky radiates colder than the air. Given how steep the first table is, treat these as a range check on a measurement rather than a replacement for one.</p>'+
+      '<p style="color:var(--warn)"><b>What will not work:</b> a pyranometer on its own. The ECMWF method needs seven radiation fields, not just global horizontal irradiance.</p>'+
+
+      '<h4>What a globe reading means, at your conditions</h4>'+
+      '<div class="scroll tight"><table><thead><tr><th class="num">Globe reads °C</th><th class="num">T<sub>mrt</sub> °C</th>'+
+      '<th class="num">above air °C</th><th class="num">UTCI °C</th><th>Thermal stress</th></tr></thead><tbody>'+
+      rows.join('')+'</tbody></table></div>'+
+      '<p>Note how steep this is. A globe only three degrees above air temperature already implies a T<sub>mrt</sub> roughly ten degrees above it, because the convective term is large. That steepness is exactly why guessing T<sub>mrt</sub> is a bad idea, and why the field starts empty rather than pre-filled.</p>'+
+
+      '<h4>Why globe diameter is an input</h4>'+
+      '<p>The standard black globe is <b>150 mm</b>, the Vernon globe that ISO 7726 and ISO 7243 are written around, so 0.15 is the value to leave alone unless you know your instrument differs. It is editable because smaller globes are common (they respond in minutes rather than twenty) and the ISO 7726 conversion carries a D<sup>0.4</sup> term, so the same reading means different things:</p>'+
+      '<div class="scroll tight"><table><thead><tr><th>Globe</th><th class="num">D, m</th><th class="num">T<sub>mrt</sub> °C</th><th class="num">above air °C</th></tr></thead><tbody>'+
+      drow+'</tbody></table></div>'+
+      '<p>All four rows are the same globe reading, '+N(v.t+9,1)+' °C, at the same air temperature and wind.</p>'+
+
+      '<h4>Natural wet bulb is not the psychrometric wet bulb</h4>'+
+      '<p>The ISO 7243 card asks for a <b>natural wet bulb</b>: a wet-wicked thermometer sitting in whatever air happens to be moving past it. The humidity solver computes a <b>psychrometric wet bulb</b>, which assumes proper aspiration. The natural one reads higher, because less airflow means less evaporative cooling. Substituting one for the other underestimates WBGT, so the card asks for the measurement instead of deriving it.</p>'+
+      '<p>If you have neither instrument, the comfort card gives the BOM approximation from temperature and humidity alone. It is a reasonable screening figure and nothing more: it has no radiation or wind term, so it cannot tell sun from shade.</p>'+
+      '</div>'};
+  },
+  src:'ISO 7726 forced-convection relation for T<sub>mrt</sub> from globe temperature, with the wind scaled from 10 m to globe height by the log law. Sunny-day T<sub>mrt</sub> range from Di Napoli, C., R. Hogan and F. Pappenberger, 2020: <i>Int J Biometeorol</i> <b>64</b>, 1233-1245. Both tables are computed live from the air temperature and wind you enter, using the same functions the cards above use.'
 });
 
 /* =================================================================
@@ -2441,6 +2516,7 @@ card('ref', {
      ['Bolton eq. numbering for the dewpoint LCL form','Sources label it eq. 15 or eq. 21. The formulas themselves are verified; only the label is uncertain.'],
      ['QNE','Not a genuine ICAO Q-code, and two incompatible usages circulate: the 1013.25 hPa <i>setting</i>, and the <i>indicated altitude</i> with that setting on the ground.'],
      ['ISO 2533 and US Std Atm 1976 primary PDFs','Not read directly (host restrictions). Constants confirmed via three independent sources that agree exactly.'],
+     ['ISO 7726 and ISO 7243 primary text','Paywalled; the free sample stops at the scope. The WBGT weights, the globe-to-T<sub>mrt</sub> formula and its 0.15 m / 0.95 constants were confirmed against ECMWF’s thermofeel and a second reference implementation, which agree exactly, but not against the standards themselves.'],
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
