@@ -163,6 +163,8 @@ main{padding:1.5rem 1.5rem 5rem; max-width:1320px; min-width:0}
 .fields{display:grid; grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); gap:.6rem}
 .fields.one{grid-template-columns:1fr}
 .f{display:flex; flex-direction:column; gap:.25rem; min-width:0}
+.f2{grid-column:span 2}
+input.off,select.off{opacity:.4; cursor:not-allowed}
 .fl{
   font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:500;
   letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);
@@ -258,6 +260,7 @@ tr:last-child td{border-bottom:0}
 .prose code{font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--panel-2); padding:.08rem .28rem; border-radius:2px}
 
 @media (max-width:840px){
+  .f2{grid-column:span 1}
   .app{grid-template-columns:minmax(0,1fr)}
   .rail{
     position:sticky; top:53px; min-height:0; border-right:0;
@@ -1448,7 +1451,7 @@ function card(mod, spec){
     html += '<div class="fields'+(spec.fields.length===1?' one':'')+'">';
     for(const f of spec.fields){
       const id = ns+f.id; ids[f.id] = id;
-      html += '<div class="f"><label class="fl" for="'+id+'">'+f.label+'</label>';
+      html += '<div class="f'+(f.wide?' f2':'')+'"><label class="fl" for="'+id+'">'+f.label+'</label>';
       if(f.type==='sel'){
         html += '<select id="'+id+'">'+f.opts.map(o=>
           '<option value="'+esc(o[0])+'"'+(o[0]===f.val?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
@@ -1488,6 +1491,14 @@ function card(mod, spec){
       out.innerHTML = (res.rows||[]).map(r=>
         '<div class="r'+(r.cls?' '+r.cls:'')+'"><span class="k">'+r.k+'</span>'
         + '<span class="v">'+r.v+'</span><span class="u">'+(r.u||'')+'</span></div>').join('');
+    }
+    if(res.labels) for(const k in res.labels){
+      const lab = document.querySelector('label[for="'+ids[k]+'"]');
+      if(lab) lab.innerHTML = res.labels[k];
+    }
+    if(res.disable) for(const k in res.disable){
+      const e = document.getElementById(ids[k]);
+      if(e){ e.disabled = !!res.disable[k]; e.classList.toggle('off', !!res.disable[k]); }
     }
     if(res.flag){ flg.innerHTML = res.flag; flg.classList.remove('hide'); }
     else flg.classList.add('hide');
@@ -1862,14 +1873,15 @@ card('moist', {
     {id:'t',  label:'Air temperature °C', type:'num', val:32, step:0.1},
     {id:'rh', label:'Relative humidity %', type:'num', val:75, step:1},
     {id:'w',  label:'Wind at 10 m m/s', type:'num', val:2, step:0.1},
-    {id:'tmode', label:'Mean radiant temp', type:'sel', val:'ta',
-      opts:[['ta','Same as air temperature (shade, overcast or night)'],
-            ['val','Enter T&#7745;&#7523;&#8341; directly'],
-            ['globe','Derive from a black-globe reading']]},
-    {id:'tval', label:'Tmrt or globe °C', type:'num', val:45, step:0.1}
+    {id:'tmode', label:'Radiation: how do you know T<sub>mrt</sub>?', type:'sel', val:'ta', wide:true,
+      opts:[['ta','I do not have it — assume shade, overcast or night'],
+            ['globe','I have a black-globe thermometer reading'],
+            ['val','I already know Tmrt (from a model or ERA5-HEAT)']]},
+    {id:'tval', label:'not needed', type:'num', val:45, step:0.1}
   ],
   rule:'UTCI is an <b>equivalent temperature</b>: the air temperature of a reference environment that would put the same physiological strain on the body. Underneath is a 187-node thermophysiological model with clothing that adapts to conditions, not a curve fitted to a table. It takes four inputs, and the fourth one, radiation, is the reason it works in sun as well as shade.',
   compute(v){
+    const LBL = {ta:'not needed in this mode', globe:'Globe thermometer reads °C', val:'T<sub>mrt</sub> value °C'};
     let tmrt, how;
     if(v.tmode === 'ta'){ tmrt = v.t; how = 'set equal to air temperature'; }
     else if(v.tmode === 'globe'){
@@ -1905,7 +1917,9 @@ card('moist', {
     }
     if(v.w < 0.5) flag = (flag ? flag + ' ' : '') +
       'Wind was raised to the UTCI minimum of 0.5 m/s; the procedure is not defined below that.';
-    return {rows: rowsOf(rows), flag: flag};
+    return {rows: rowsOf(rows), flag: flag,
+            labels: {tval: LBL[v.tmode]},
+            disable: {tval: v.tmode === 'ta'}};
   },
   src:'<b>Bröde, P. et al. (2012)</b>, <i>Deriving the operational procedure for the Universal Thermal Climate Index (UTCI)</i>, Int J Biometeorol <b>56</b>, 481-494. A 6th-order regression polynomial with 210 coefficients over air temperature, wind at 10 m, T<sub>mrt</sub> − T<sub>a</sub> and vapour pressure, approximating the UTCI-Fiala multi-node model to about 1.1 K RMSE. Developed under COST Action 730 (2005-2009). Valid for −50 ≤ T<sub>a</sub> ≤ +50 °C, −30 ≤ T<sub>mrt</sub> − T<sub>a</sub> ≤ +70 K, 0.5 ≤ v ≤ 17 m/s, RH 5-100%. The saturation vapour pressure used here is UTCI’s own formula, not the app’s WMO/CIMO one, because the polynomial was fitted against it. ECMWF has produced pan-European UTCI operationally since 2016 and it is the index behind Copernicus ERA5-HEAT. This implementation was checked against the reference implementation at 33,420 points; largest difference 1.7×10⁻¹¹ °C.'
 });
