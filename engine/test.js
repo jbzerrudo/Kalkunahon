@@ -273,6 +273,11 @@ ok('stronger wind pulls Tmrt further from Tg',
    M.mrtFromGlobe(45,32,6) > M.mrtFromGlobe(45,32,1) ? 1:0, 1, 0);
 
 eq('WBGT band at 31.0',   M.wbgtBand(31.0).name, 'Danger');
+eq('WBGT band on a float that displays as 31.00',
+   M.wbgtBand(M.wbgtISO(33,31,17,true)).name, 'Danger');
+ok('that value really is just under 31',
+   M.wbgtISO(33,31,17,true) < 31 ? 1:0, 1, 0);
+eq('UTCI category at an exact boundary', M.utciCategory(0.1+0.2+25.7), 'moderate heat stress');
 eq('WBGT band at 30.9',   M.wbgtBand(30.9).name, 'Severe warning');
 eq('WBGT band at 28.0',   M.wbgtBand(28.0).name, 'Severe warning');
 eq('WBGT band at 27.9',   M.wbgtBand(27.9).name, 'Warning');

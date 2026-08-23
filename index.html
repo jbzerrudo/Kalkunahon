@@ -1174,7 +1174,7 @@ const WBGT_BANDS = [
 ];
 function wbgtBand(w){
   if(!isFinite(w)) return null;
-  for(const b of WBGT_BANDS) if(w >= b.lo) return b;
+  for(const b of WBGT_BANDS) if(w >= b.lo - 1e-9) return b;
   return WBGT_BANDS[WBGT_BANDS.length-1];
 }
 
@@ -1193,7 +1193,7 @@ const UTCI_BANDS = [
 ];
 function utciCategory(u){
   if(!isFinite(u)) return null;
-  for(const b of UTCI_BANDS) if(u >= b.lo) return b.name;
+  for(const b of UTCI_BANDS) if(u >= b.lo - 1e-9) return b.name;
   return UTCI_BANDS[UTCI_BANDS.length-1].name;
 }
 /* Published validity domain. Returns the list of breaches, empty if in range. */
@@ -1984,6 +1984,16 @@ card('moist', {
   rule:'This card needs two instrument readings. The <b>natural wet bulb</b> is an unaspirated wet bulb sitting in the ambient airflow, <b>not</b> the psychrometric wet bulb from the humidity solver, and it reads higher. The <b>globe temperature</b> comes from a black sphere, standard diameter 150 mm. Substituting the psychrometric wet bulb underestimates WBGT, so this card asks for the measurements rather than inventing them.<br><br><b>No globe or wet bulb?</b> The comfort card above gives the BOM approximation from temperature and humidity alone. It is a reasonable screening figure, but it has no radiation or wind term at all, so it cannot tell sun from shade. For the radiation part specifically, the UTCI card brackets the answer between shade and strong sun without needing any instrument.',
   compute(v){
     const solar = v.exp === 'sun';
+    if(v.tnw > v.t){
+      return {
+        rows: rowsOf([
+          ['WBGT','—','', 'hero'],
+          ['risk level, exercise','reading not physical','', 'hero txt']
+        ]),
+        flag: '<b>The natural wet bulb cannot exceed the air temperature.</b> A wet bulb is cooled by evaporation, so it reads at or below the dry bulb, never above. You entered T<sub>nw</sub> = '
+              + N(v.tnw,1) + ' °C against an air temperature of ' + N(v.t,1) + ' °C. Nothing is computed from readings that cannot occur, because a WBGT derived from them would look authoritative and mean nothing.'
+      };
+    }
     const w = M.wbgtISO(v.tnw, v.tg, v.t, solar);
     const tmrt = M.mrtFromGlobe(v.tg, v.t, Math.max(v.w,0), v.d);
     const rhApprox = M.rhFromDewpoint(v.t, Math.min(v.tnw, v.t));
@@ -2000,8 +2010,7 @@ card('moist', {
       ['UTCI at this T<sub>mrt</sub>', N(M.utci(v.t, tmrt, Math.max(v.w,0.5), Math.min(Math.max(rhApprox,5),100)),1), '°C', 'dim']
     ];
     let flag = null;
-    if(v.tnw > v.t) flag = 'The natural wet bulb cannot exceed the air temperature. Check the readings.';
-    else if(v.tg < v.t) flag = 'A globe reading below air temperature implies a net radiative <b>loss</b>, which happens under a clear night sky but not in sun. T<sub>mrt</sub> comes out below air temperature, which is correct for that case.';
+    if(v.tg < v.t) flag = 'A globe reading below air temperature implies a net radiative <b>loss</b>, which happens under a clear night sky but not in sun. T<sub>mrt</sub> comes out below air temperature, which is correct for that case.';
     else flag = '<b>That risk level is an exercise scale, not a universal one.</b> It comes from Japan’s Ministry of the Environment, after the Japan Sports Association, and assumes physical activity. ISO 7243’s own occupational limits are not a single scale at all: they vary with metabolic rate, acclimatisation and clothing, so the same WBGT is acceptable for light seated work and unacceptable for heavy labour. ISO 7243 is a <b>screening</b> method for exposure over a working day of up to 8 hours, for healthy adults, and does not apply to brief exposures.';
     return {rows: rowsOf(rows), flag: flag};
   },

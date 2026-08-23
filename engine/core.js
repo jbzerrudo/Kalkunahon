@@ -749,7 +749,7 @@ const WBGT_BANDS = [
 ];
 function wbgtBand(w){
   if(!isFinite(w)) return null;
-  for(const b of WBGT_BANDS) if(w >= b.lo) return b;
+  for(const b of WBGT_BANDS) if(w >= b.lo - 1e-9) return b;
   return WBGT_BANDS[WBGT_BANDS.length-1];
 }
 
@@ -768,7 +768,7 @@ const UTCI_BANDS = [
 ];
 function utciCategory(u){
   if(!isFinite(u)) return null;
-  for(const b of UTCI_BANDS) if(u >= b.lo) return b.name;
+  for(const b of UTCI_BANDS) if(u >= b.lo - 1e-9) return b.name;
   return UTCI_BANDS[UTCI_BANDS.length-1].name;
 }
 /* Published validity domain. Returns the list of breaches, empty if in range. */
