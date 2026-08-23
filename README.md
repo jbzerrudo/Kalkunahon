@@ -13,7 +13,7 @@ and keep it on a USB stick.
 | Module | Contents |
 |---|---|
 | Wind & tropical cyclone | Exact speed unit conversions and Beaufort force; WMO Table 1.2 conversion between 1-minute and 10-minute sustained Vmax; WMO Table 1.1 gust factors; side-by-side classification on the NHC, JMA, PAGASA, BOM and IMD scales at their own averaging periods; Atkinson-Holliday and Knaff-Zehr pressure-wind relationships; u/v components; height adjustment to 10 m; wind power density |
-| Moisture & comfort | Humidity solver from temperature plus RH, dewpoint or wet-bulb; vapour pressure, mixing ratio, specific and absolute humidity, virtual temperature, frost point, ice-bulb; heat index, humidex, apparent temperature, WBGT, wind chill |
+| Moisture & comfort | Humidity solver from temperature plus RH, dewpoint or wet-bulb; vapour pressure, mixing ratio, specific and absolute humidity, virtual temperature, frost point, ice-bulb; heat index, humidex, apparent temperature, wind chill; **UTCI** with mean radiant temperature; **ISO 7243 WBGT** and ISO 7726 radiant temperature from a black globe |
 | Pressure & altitude | Pressure units; station pressure to MSL (QFF); QNH, QFE, QNE and pressure altitude; density altitude and moist air density; ISA state at height; hypsometric equation and thickness |
 | Thermodynamics | Potential, virtual and equivalent potential temperature; dry and saturated adiabatic lapse rates; LCL by Espy's rule and by the Romps (2017) exact solution; Lifted, Showalter, K, Total Totals and SWEAT indices |
 
@@ -25,16 +25,24 @@ mean wind of one averaging period into the expected peak gust within it. They an
 questions, and the naive reciprocal of Table 1.1 gives 0.952, not 0.93. MeteoCalc keeps them in
 separate calculators and says so on both.
 
+**Radiation is what separates the comfort indices.** Heat index, humidex and apparent
+temperature assume the radiant environment away. UTCI and ISO 7243 WBGT need it as an input,
+which is why they work in sun as well as shade. Where mean radiant temperature is unknown the
+app sets it equal to air temperature, states that this means shade or overcast or night, and
+warns that it understates heat stress in sun by roughly 7 to 9 °C.
+
 **Intensity scales use different averaging periods.** A 10-minute 64 kt typhoon is roughly a
 1-minute 69 kt system. The scale comparison converts each scale to its own native period before
 classifying, and refuses to convert where WMO publishes no factor.
 
 ## Accuracy
 
-The calculation engine ships with 142 numerical assertions checked against published worked
+The calculation engine ships with 169 numerical assertions checked against published worked
 examples, including Stull's saturated adiabat (10 C, 70 kPa -> 4.58 K/km), Bolton's equivalent
 potential temperature, Romps' LCL values to sub-metre, the ECCC humidex worked example, NWS
-heat-index chart values, and the ISA tropopause at 226.32 hPa.
+heat-index chart values, and the ISA tropopause at 226.32 hPa. The UTCI polynomial was checked
+against a reference implementation at 33,420 points across its full validity domain; the
+largest difference was 1.7e-11 °C.
 
 ```
 node engine/test.js

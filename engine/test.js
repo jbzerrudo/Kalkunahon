@@ -226,6 +226,58 @@ ok('log profile 20m->10m over open land', M.logProfile(12,20,0.03,10), 10.73, 0.
 ok('power law 1/7 doubling height',       M.powerLaw(10,10,20,1/7), 11.041, 1e-3, 'm/s');
 ok('WPD 10 m/s at 1.225',                 M.windPowerDensity(10,1.225), 612.5, 1e-9, 'W/m2');
 
+
+console.log('\n== UTCI, ISO 7726 AND ISO 7243 ==');
+{ // reference values from pythermalcomfort 4.4.2, unrounded
+  const REF = [
+    [30, 30, 1.0, 50, 30.348505939],
+    [35, 60, 2.0, 40, 41.041283394],
+    [20, 20, 0.5, 50, 19.869053958],
+    [-5, -5, 3.0, 80, -13.686559279],
+    [40, 70, 1.0, 30, 48.106249070],
+    [25, 25, 0.5, 50, 24.884648694],
+    [0,  0,  5.0, 60, -14.424607706]
+  ];
+  let worst = 0;
+  REF.forEach(r => { worst = Math.max(worst, Math.abs(M.utci(r[0],r[1],r[2],r[3]) - r[4])); });
+  ok('UTCI vs reference implementation', worst, 0, 1e-8, 'C');
+  ok('UTCI(30,30,1,50)',  M.utci(30,30,1.0,50),  30.348505939, 1e-8, 'C');
+  ok('UTCI(35,60,2,40)',  M.utci(35,60,2.0,40),  41.041283394, 1e-8, 'C');
+  ok('UTCI(-5,-5,3,80)',  M.utci(-5,-5,3.0,80), -13.686559279, 1e-8, 'C');
+}
+{ // in the UTCI reference environment the index tracks air temperature closely
+  let worst = 0;
+  for(let ta = 5; ta <= 35; ta += 1) worst = Math.max(worst, Math.abs(M.utci(ta, ta, 0.5, 50) - ta));
+  ok('UTCI ~ Ta in the reference environment', worst, 0, 2.5, 'C');
+}
+ok('UTCI polynomial has 211 additive terms',
+   (M.utciPoly.toString().match(/\n\s*[+-]/g) || []).length + 1, 211, 0);
+ok('UTCI rises with radiant load',  M.utci(30,60,1,50) > M.utci(30,30,1,50) ? 1:0, 1, 0);
+ok('UTCI falls with wind in heat',  M.utci(35,35,6,50) < M.utci(35,35,0.5,50) ? 1:0, 1, 0);
+ok('sunny Tmrt (+30 K) worth ~7-9 C', M.utci(30,60,1,50) - M.utci(30,30,1,50), 8, 1.5, 'C');
+eq('category at 27 C',   M.utciCategory(27),  'moderate heat stress');
+eq('category at 26 C',   M.utciCategory(26),  'moderate heat stress');
+eq('category at 25.9 C', M.utciCategory(25.9),'no thermal stress');
+eq('category at 46 C',   M.utciCategory(46),  'extreme heat stress');
+eq('category at -41 C',  M.utciCategory(-41), 'extreme cold stress');
+eq('in-range inputs flag nothing', M.utciRangeIssues(30,30,2,50).length, 0);
+eq('wind above 17 m/s is flagged',  M.utciRangeIssues(30,30,20,50).length, 1);
+eq('Tmrt-Ta above +70 K is flagged', M.utciRangeIssues(30,105,2,50).length, 1);
+
+ok('wind 10 m -> 1.1 m scaling', M.scaleWind(5,1.1), 5*Math.log10(110)/Math.log10(1000), 1e-12, 'm/s');
+ok('wind scaling is identity at 10 m', M.scaleWind(7,10), 7, 1e-12, 'm/s');
+ok('Tmrt = Tg when globe reads air temperature', M.mrtFromGlobe(28,28,3), 28, 1e-9, 'C');
+ok('hot globe gives Tmrt above air temp', M.mrtFromGlobe(45,32,2) > 45 ? 1:0, 1, 0);
+ok('Tmrt from globe 45C/Ta 32/v2', M.mrtFromGlobe(45,32,2), 71.52, 0.02, 'C');
+ok('stronger wind pulls Tmrt further from Tg',
+   M.mrtFromGlobe(45,32,6) > M.mrtFromGlobe(45,32,1) ? 1:0, 1, 0);
+
+ok('ISO 7243 outdoor weights', M.wbgtISO(20,40,30,true),  0.7*20+0.2*40+0.1*30, 1e-12, 'C');
+ok('ISO 7243 indoor weights',  M.wbgtISO(20,40,30,false), 0.7*20+0.3*40,        1e-12, 'C');
+ok('ISO 7243 weights sum to 1 (outdoor)', 0.7+0.2+0.1, 1, 1e-12);
+ok('ISO 7243 differs from the BOM approximation',
+   Math.abs(M.wbgtISO(25,42,33,true) - M.wbgtSimple(33,55)) > 1 ? 1:0, 1, 0);
+
 console.log('\n---------------------------------------------');
 console.log('  PASS', pass, '  FAIL', fail);
 process.exit(fail?1:0);
