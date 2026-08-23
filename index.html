@@ -1644,6 +1644,8 @@ card('wind', {
   ],
   rule:'WMO is explicit: <b>mean wind speeds must not be converted between averaging periods using gust factors — only gust wind speeds.</b> The factor is also valid only between a mean and a gust <b>at the same height</b> (10 m).',
   compute(v){
+    if(!(v.v >= 0)) return {rows: rowsOf([['gust factor','—','', 'hero'],['peak gust','—','', 'hero']]),
+      flag:'A mean wind speed cannot be negative. Wind speed is a magnitude; direction is a separate quantity, handled by the wind components card.'};
     const G = M.gustFactor(+v.ta, +v.t0, v.ex);
     if(!isFinite(G)) return {rows:rowsOf([['gust factor','—','']]),
       flag:'Table 1.1 has no entry for a '+v.ta+'-second gust within a '+(+v.t0/60)+'-minute mean. The gust duration must be shorter than or equal to the averaging period.'};
@@ -2025,7 +2027,7 @@ card('moist', {
     {id:'w', label:'Wind at 10 m m/s', type:'num', val:2, step:0.1},
     {id:'rh',label:'Relative humidity %', type:'num', val:75, step:1}
   ],
-  rule:'Two cards above need readings a normal weather station does not produce: <b>mean radiant temperature</b> and <b>natural wet bulb</b>. This card explains where they come from and shows what your own numbers would mean.',
+  rule:'Two cards above need readings a normal weather station does not produce: <b>mean radiant temperature</b> and <b>natural wet bulb</b>. <b>Enter your conditions above and the two tables below recalculate for them</b>: what a given globe reading would mean at your air temperature and wind, and how much the globe’s size changes that answer. The text explains where the readings come from in the first place.',
   compute(v){
     const w = Math.max(v.w, 0.5);
     const rows = [];
@@ -2110,6 +2112,10 @@ card('press', {
     {id:'rh', label:'Relative humidity %', type:'num', val:70, step:1}
   ],
   compute(v){
+    if(!(v.ps > 0)) return {rows: rowsOf([['MSL pressure (QFF)','—','', 'hero']]),
+      flag:'Station pressure must be greater than zero. A barometer cannot read zero or negative absolute pressure.'};
+    if(v.rh < 0 || v.rh > 100) return {rows: rowsOf([['MSL pressure (QFF)','—','', 'hero']]),
+      flag:'Relative humidity must lie between 0 and 100%. Above 100% the vapour pressure term in the WMO reduction stops meaning anything.'};
     const es = (v.rh/100)*M.esWater(v.t);
     const p0 = M.qff(v.ps, v.h, v.t, es);
     const tmv = M.qffTmv(v.h, v.t, es);
@@ -2232,6 +2238,10 @@ card('press', {
     {id:'tv', label:'Mean virtual temp °C', type:'num', val:-7, step:0.1}
   ],
   compute(v){
+    if(!(v.p1 > 0) || !(v.p2 > 0)) return {rows: rowsOf([['thickness','—','', 'hero']]),
+      flag:'Both levels must be greater than zero. Pressure reaches zero only at the top of the atmosphere, where the thickness integral diverges.'};
+    if(v.p2 >= v.p1) return {rows: rowsOf([['thickness','—','', 'hero']]),
+      flag:'The upper level must be at a <b>lower</b> pressure than the lower level. You have '+N(v.p1,0)+' hPa below and '+N(v.p2,0)+' hPa above, which is inverted. Swap them, or the thickness comes out negative.'};
     const tv = v.tv+273.15;
     const dz = M.thickness(v.p1, v.p2, tv);
     const is1000500 = Math.abs(v.p1-1000)<1 && Math.abs(v.p2-500)<1;
@@ -2262,6 +2272,8 @@ card('thermo', {
     {id:'p',  label:'Pressure hPa',   type:'num', val:1000, step:1}
   ],
   compute(v){
+    if(!(v.p > 0)) return {rows: rowsOf([['potential temperature &theta;','—','', 'hero'],['equivalent potential &theta;<sub>e</sub>','—','', 'hero']]),
+      flag:'Pressure must be greater than zero. The Poisson and Bolton relations both divide by it.'};
     const tK = v.t+273.15;
     const e  = M.esBolton(v.td);
     const w  = M.mixingRatio(e, v.p);
