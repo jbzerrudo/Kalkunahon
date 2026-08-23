@@ -49,7 +49,10 @@ its two equations, and Knaff & Zehr's equation 8, whose printed sign does not ro
 Open `index.html`. That is the whole procedure. It works from a local file, from a USB stick,
 and from a phone in aeroplane mode.
 
-Served over HTTPS, Chrome and Edge will offer to install it as a desktop app.
+Served over HTTPS, Chrome and Edge will offer to install it as a desktop app. The service
+worker caches the app on first visit, so the installed copy keeps working with no connection.
+Page loads are network-first, so anyone online always gets the newest build rather than a
+stale cached one.
 
 ## Repository layout
 
@@ -58,6 +61,7 @@ index.html             the app
 manifest.webmanifest   makes it installable
 icon-192.png           required for the install prompt
 icon-512.png           required for the install prompt
+sw.js                  service worker, so the installed app works with no connection
 engine/core.js         the calculation engine, no dependencies
 engine/test.js         142 assertions against published values
 .nojekyll              stops GitHub Pages running Jekyll over the files

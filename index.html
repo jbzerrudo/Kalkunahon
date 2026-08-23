@@ -1899,6 +1899,15 @@ themeBtn.addEventListener('click', ()=>{
 });
 applyTheme();
 
+// Offline support for the hosted copy. A no-op where sw.js does not exist
+// (the standalone file, which is already offline by nature), because a failed
+// registration changes nothing.
+const secureCtx = location.protocol === 'https:' ||
+                  location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+if('serviceWorker' in navigator && secureCtx){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
 const off = document.getElementById('offline');
 function netState(){
   off.textContent = navigator.onLine ? 'Runs offline' : 'Offline — still working';
