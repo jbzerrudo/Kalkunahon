@@ -1,6 +1,6 @@
 {
-  "name": "MeteoCalc",
-  "short_name": "MeteoCalc",
+  "name": "Kalkunahon",
+  "short_name": "Kalkunahon",
   "description": "Offline meteorological calculator: wind and tropical cyclone, moisture, pressure and altitude, thermodynamics.",
   "start_url": ".",
   "scope": ".",

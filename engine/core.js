@@ -121,13 +121,40 @@ const TC_SCALES = [
             {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
             {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
   { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
-    bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
-            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
-            {lo:100,name:'Super Typhoon'} ] },
+    // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
+    // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
+    // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
+    // and are not strict conversions of the knot bounds (22 kt = 40.7, published as 39).
+    bands:[ {lo:0,  kmh:0,   name:'Low Pressure Area'},
+            {lo:22, kmh:39,  name:'Tropical Depression'},
+            {lo:34, kmh:62,  name:'Tropical Storm'},
+            {lo:48, kmh:89,  name:'Severe Tropical Storm'},
+            {lo:64, kmh:118, name:'Typhoon'},
+            {lo:100,kmh:185, name:'Super Typhoon'} ] },
   { id:'bom', name:'Australian BOM', avg:600, region:'Australian region',
     bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
             {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
             {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
+  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific',
+    // IBTrACS v04r01 HKO_CAT, stated directly in knots.
+    bands:[ {lo:0,  name:'Low'},                   {lo:22, name:'Tropical Depression'},
+            {lo:34, name:'Tropical Storm'},        {lo:48, name:'Severe Tropical Storm'},
+            {lo:64, name:'Typhoon'},               {lo:81, name:'Severe Typhoon'},
+            {lo:100,name:'Super Typhoon'} ] },
+  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific',
+    // Chinese National Standard, in force since 15 June 2006. Authoritative bounds are in
+    // m/s: 10.8 / 17.2 / 24.5 / 32.7 / 41.5 / 51.0. Knots below are the integer thresholds
+    // that reproduce those bounds (1 kt = 0.514444 m/s).
+    bands:[ {lo:0,  name:'Weaker than Tropical Depression'},
+            {lo:21, name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
+            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
+            {lo:81, name:'Severe Typhoon'},        {lo:100,name:'Super Typhoon'} ] },
+  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific',
+    // IBTrACS v04r01 KMA_CAT. Authoritative bounds are in m/s: 14 / 17 / 25 / 33.
+    // KMA's metric bounds differ from the JMA/CMA set, so the knot thresholds differ too.
+    bands:[ {lo:0,  name:'Low'},                   {lo:28, name:'Tropical Depression'},
+            {lo:34, name:'Tropical Storm'},        {lo:49, name:'Severe Tropical Storm'},
+            {lo:65, name:'Typhoon'} ] },
   { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean',
     bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
             {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},

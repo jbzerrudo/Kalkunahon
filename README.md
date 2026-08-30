@@ -1,4 +1,4 @@
-# MeteoCalc
+# Kalkunahon
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22070323.svg)](https://doi.org/10.5281/zenodo.22070323)
 [![Licence: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-05687A)](https://polyformproject.org/licenses/noncommercial/1.0.0/)
@@ -8,8 +8,8 @@ no server, no network.
 Every result carries the published source it derives from, and values outside a formula's
 stated range are flagged rather than silently returned.
 
-**Live:** https://jbzerrudo.github.io/MeteoCalc/
-**Download:** grab `MeteoCalc.html` from [Releases](https://github.com/jbzerrudo/MeteoCalc/releases)
+**Live:** https://jbzerrudo.github.io/Kalkunahon/
+**Download:** grab `Kalkunahon.html` from [Releases](https://github.com/jbzerrudo/Kalkunahon/releases)
 and keep it on a USB stick.
 
 ## What it covers
@@ -26,7 +26,7 @@ and keep it on a USB stick.
 **The two WMO wind tables are not interchangeable.** Table 1.2 converts between agency
 estimates of peak storm intensity: at sea, `V(10-min) = 0.93 x V(1-min)`. Table 1.1 converts a
 mean wind of one averaging period into the expected peak gust within it. They answer different
-questions, and the naive reciprocal of Table 1.1 gives 0.952, not 0.93. MeteoCalc keeps them in
+questions, and the naive reciprocal of Table 1.1 gives 0.952, not 0.93. Kalkunahon keeps them in
 separate calculators and says so on both.
 
 **Radiation is what separates the comfort indices.** Heat index, humidex and apparent
@@ -89,17 +89,17 @@ to the latest version. Use it when you mean the tool in general.
 **Version DOI** [10.5281/zenodo.22070324](https://doi.org/10.5281/zenodo.22070324) points at v1.0.0
 specifically. Use it in a paper, so a reader gets the exact version you used.
 
-> Zerrudo, J. (2026). *MeteoCalc: an offline meteorological calculator* (version 1.0.0).
+> Zerrudo, J. (2026). *Kalkunahon: an offline meteorological calculator* (version 1.0.0).
 > Zenodo. https://doi.org/10.5281/zenodo.22070324
 
 ```bibtex
-@software{zerrudo_meteocalc_2026,
+@software{zerrudo_kalkunahon_2026,
   author  = {Zerrudo, Jef},
-  title   = {MeteoCalc: an offline meteorological calculator},
+  title   = {Kalkunahon: an offline meteorological calculator},
   version = {1.0.0},
   year    = {2026},
   doi     = {10.5281/zenodo.22070324},
-  url     = {https://jbzerrudo.github.io/MeteoCalc/}
+  url     = {https://jbzerrudo.github.io/Kalkunahon/}
 }
 ```
 
@@ -128,7 +128,7 @@ Commercial use is reserved to the copyright holder.
 
 ### Commercial licensing
 
-The licence above does not cover commercial use. To use MeteoCalc in paid client work, inside a
+The licence above does not cover commercial use. To use Kalkunahon in paid client work, inside a
 product or service you sell, or in any other commercial setting, contact **Jef Zerrudo** at
 **jbzerrudo@pagasa.dost.gov.ph** to arrange a licence.
 

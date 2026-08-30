@@ -1,8 +1,8 @@
-/* MeteoCalc service worker.
+/* Kalkunahon service worker.
    Bump VERSION whenever you ship a new build, so old caches are discarded.
-   Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/MeteoCalc)
+   Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/Kalkunahon)
    PolyForm Noncommercial License 1.0.0 */
-const VERSION = 'meteocalc-v12';
+const VERSION = 'kalkunahon-v13';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

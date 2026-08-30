@@ -7,25 +7,25 @@
 <meta name="theme-color" content="#05687A">
 <meta name="author" content="Jef Zerrudo">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="MeteoCalc">
-<meta property="og:title" content="MeteoCalc: an offline meteorological calculator">
+<meta property="og:site_name" content="Kalkunahon">
+<meta property="og:title" content="Kalkunahon: an offline meteorological calculator">
 <meta property="og:description" content="Wind and tropical cyclone conversions, moisture, pressure and altitude, thermodynamics and stability. Runs with no internet. Every result carries the published source it came from.">
-<meta property="og:url" content="https://jbzerrudo.github.io/MeteoCalc/">
-<meta property="og:image" content="https://jbzerrudo.github.io/MeteoCalc/og-card.png">
+<meta property="og:url" content="https://jbzerrudo.github.io/Kalkunahon/">
+<meta property="og:image" content="https://jbzerrudo.github.io/Kalkunahon/og-card.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="MeteoCalc, showing a tropical cyclone maximum wind conversion: 100 kt one-minute sustained equals 93 kt ten-minute sustained.">
+<meta property="og:image:alt" content="Kalkunahon, showing a tropical cyclone maximum wind conversion: 100 kt one-minute sustained equals 93 kt ten-minute sustained.">
 <meta property="og:locale" content="en_GB">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="MeteoCalc: an offline meteorological calculator">
+<meta name="twitter:title" content="Kalkunahon: an offline meteorological calculator">
 <meta name="twitter:description" content="Wind and tropical cyclone conversions, moisture, pressure and altitude, thermodynamics. Runs with no internet. Every result cites its source.">
-<meta name="twitter:image" content="https://jbzerrudo.github.io/MeteoCalc/og-card.png">
+<meta name="twitter:image" content="https://jbzerrudo.github.io/Kalkunahon/og-card.png">
 <link rel="manifest" href="manifest.webmanifest">
-<title>MeteoCalc</title>
+<title>Kalkunahon</title>
 <!--
-  MeteoCalc - offline meteorological calculator
-  Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/MeteoCalc)
+  Kalkunahon - offline meteorological calculator
+  Required Notice: Copyright 2026 Jef Zerrudo (https://github.com/jbzerrudo/Kalkunahon)
   Licensed under the PolyForm Noncommercial License 1.0.0
   https://polyformproject.org/licenses/noncommercial/1.0.0
   Free for any noncommercial purpose, including use by educational institutions,
@@ -285,7 +285,7 @@ tr:last-child td{border-bottom:0}
 
 <header class="top">
   <div class="brand">
-    <h1>MeteoCalc</h1>
+    <h1>Kalkunahon</h1>
     <span class="tag">Offline · every result cited</span>
   </div>
   <span class="pill" id="offline">Runs offline</span>
@@ -359,17 +359,17 @@ tr:last-child td{border-bottom:0}
       <div class="card span2" style="margin-top:1rem">
         <h3 class="card-t"><span>Licence &amp; commercial use</span></h3>
         <div class="prose">
-          <p>MeteoCalc is free to use, copy, modify and share for any <b>noncommercial</b> purpose under the
+          <p>Kalkunahon is free to use, copy, modify and share for any <b>noncommercial</b> purpose under the
             <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" target="_blank" rel="noopener">PolyForm
             Noncommercial License 1.0.0</a>. The licence explicitly permits use by educational institutions,
             public research organisations, government institutions, public safety and health bodies,
             environmental organisations and charities, <i>regardless of the source of funding</i>. Students,
             universities and national meteorological services are all covered.</p>
-          <p><b>Commercial use is reserved to the copyright holder.</b> To use MeteoCalc in paid client work,
+          <p><b>Commercial use is reserved to the copyright holder.</b> To use Kalkunahon in paid client work,
             inside a product or service you sell, or in any other commercial setting, contact Jef Zerrudo at
             <a href="mailto:jbzerrudo@pagasa.dost.gov.ph">jbzerrudo@pagasa.dost.gov.ph</a> to arrange a licence.</p>
           <p style="color:var(--ink-3);font-size:12px">Required Notice: Copyright 2026 Jef Zerrudo
-            (github.com/jbzerrudo/MeteoCalc). If you pass this file on, these terms travel with it.</p>
+            (github.com/jbzerrudo/Kalkunahon). If you pass this file on, these terms travel with it.</p>
         </div>
       </div>
 
@@ -546,13 +546,40 @@ const TC_SCALES = [
             {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
             {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
   { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
-    bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
-            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
-            {lo:100,name:'Super Typhoon'} ] },
+    // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
+    // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
+    // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
+    // and are not strict conversions of the knot bounds (22 kt = 40.7, published as 39).
+    bands:[ {lo:0,  kmh:0,   name:'Low Pressure Area'},
+            {lo:22, kmh:39,  name:'Tropical Depression'},
+            {lo:34, kmh:62,  name:'Tropical Storm'},
+            {lo:48, kmh:89,  name:'Severe Tropical Storm'},
+            {lo:64, kmh:118, name:'Typhoon'},
+            {lo:100,kmh:185, name:'Super Typhoon'} ] },
   { id:'bom', name:'Australian BOM', avg:600, region:'Australian region',
     bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
             {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
             {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
+  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific',
+    // IBTrACS v04r01 HKO_CAT, stated directly in knots.
+    bands:[ {lo:0,  name:'Low'},                   {lo:22, name:'Tropical Depression'},
+            {lo:34, name:'Tropical Storm'},        {lo:48, name:'Severe Tropical Storm'},
+            {lo:64, name:'Typhoon'},               {lo:81, name:'Severe Typhoon'},
+            {lo:100,name:'Super Typhoon'} ] },
+  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific',
+    // Chinese National Standard, in force since 15 June 2006. Authoritative bounds are in
+    // m/s: 10.8 / 17.2 / 24.5 / 32.7 / 41.5 / 51.0. Knots below are the integer thresholds
+    // that reproduce those bounds (1 kt = 0.514444 m/s).
+    bands:[ {lo:0,  name:'Weaker than Tropical Depression'},
+            {lo:21, name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
+            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
+            {lo:81, name:'Severe Typhoon'},        {lo:100,name:'Super Typhoon'} ] },
+  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific',
+    // IBTrACS v04r01 KMA_CAT. Authoritative bounds are in m/s: 14 / 17 / 25 / 33.
+    // KMA's metric bounds differ from the JMA/CMA set, so the knot thresholds differ too.
+    bands:[ {lo:0,  name:'Low'},                   {lo:28, name:'Tropical Depression'},
+            {lo:34, name:'Tropical Storm'},        {lo:49, name:'Severe Tropical Storm'},
+            {lo:65, name:'Typhoon'} ] },
   { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean',
     bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
             {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},
@@ -1432,7 +1459,7 @@ root.MET = API;
 
 </script>
 <script>
-/* ================= MeteoCalc UI ================= */
+/* ================= Kalkunahon UI ================= */
 (function(){
 'use strict';
 const M = window.MET;
@@ -1451,8 +1478,8 @@ const MODULES = [
 const SPEED_OPTS = [['kt','knots'],['kmh','km/h'],['ms','m/s'],['mph','mph'],['fts','ft/s']];
 const EXP_OPTS   = M.EXPOSURES.map(e=>[e, M.EXPOSURE_LABEL[e]]);
 const store = {
-  get(k,d){ try{ const v=localStorage.getItem('meteocalc.'+k); return v==null?d:v; }catch(e){ return d; } },
-  set(k,v){ try{ localStorage.setItem('meteocalc.'+k, v); }catch(e){} }
+  get(k,d){ try{ const v=localStorage.getItem('kalkunahon.'+k); return v==null?d:v; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('kalkunahon.'+k, v); }catch(e){} }
 };
 
 /* ---- card factory ---- */
@@ -2513,8 +2540,13 @@ card('ref', {
         rows.push([
           i===0 ? '<b>'+s.name+'</b><br><span class="chip">'+(s.avg/60)+'-min</span>' : '',
           b.name,
-          nxt ? b.lo+'–'+(nxt.lo-1) : '≥ '+b.lo,
-          nxt ? N(M.speedTo(b.lo,'kt','kmh'),0)+'–'+N(M.speedTo(nxt.lo-1,'kt','kmh'),0) : '≥ '+N(M.speedTo(b.lo,'kt','kmh'),0)
+          nxt ? (b.lo===0 ? '≤ '+(nxt.lo-1) : b.lo+'–'+(nxt.lo-1)) : '≥ '+b.lo,
+          (function(){
+            const kLo = b.kmh!==undefined ? b.kmh : N(M.speedTo(b.lo,'kt','kmh'),0);
+            if(!nxt) return '≥ '+kLo;
+            const kHi = nxt.kmh!==undefined ? (nxt.kmh-1) : N(M.speedTo(nxt.lo-1,'kt','kmh'),0);
+            return b.lo===0 ? '≤ '+kHi : kLo+'–'+kHi;
+          })()
         ]);
       });
     }

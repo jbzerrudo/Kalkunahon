@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "MeteoCalc: an offline meteorological calculator"
+title: "Kalkunahon: an offline meteorological calculator"
 message: "If you use this software, please cite it using these metadata."
 type: software
 authors:
@@ -14,8 +14,8 @@ identifiers:
   - type: doi
     value: 10.5281/zenodo.22070324
     description: DOI for version 1.0.0
-repository-code: "https://github.com/jbzerrudo/MeteoCalc"
-url: "https://jbzerrudo.github.io/MeteoCalc/"
+repository-code: "https://github.com/jbzerrudo/Kalkunahon"
+url: "https://jbzerrudo.github.io/Kalkunahon/"
 abstract: >-
   A single-file, offline browser calculator for meteorological conversions and
   derived quantities: wind speed units and Beaufort force, WMO tropical cyclone
@@ -31,6 +31,6 @@ keywords:
   - atmospheric thermodynamics
   - education
 license: PolyForm-Noncommercial-1.0.0
-version: 1.0.0
-date-released: "2026-08-23"
+version: 1.1.0
+date-released: "2026-08-30"
 doi: 10.5281/zenodo.22070323
