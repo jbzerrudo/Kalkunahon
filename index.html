@@ -289,6 +289,7 @@ tr:last-child td{border-bottom:0}
     <span class="tag">Offline · every result cited</span>
   </div>
   <span class="pill" id="offline">Runs offline</span>
+  <button class="tbtn" id="installBtn" type="button" hidden>Install app</button>
   <button class="tbtn" id="themeBtn" type="button">Theme: auto</button>
 </header>
 
@@ -2648,6 +2649,30 @@ const secureCtx = location.protocol === 'https:' ||
 if('serviceWorker' in navigator && secureCtx){
   window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
 }
+
+// Install prompt. Chrome and Edge fire beforeinstallprompt when the app is
+// installable and not already installed; we stash the event and show a button.
+// Browsers that never fire it (Safari, Firefox) simply keep the button hidden.
+let deferredInstall = null;
+const installBtn = document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  if(installBtn) installBtn.hidden = false;
+});
+if(installBtn){
+  installBtn.addEventListener('click', async () => {
+    if(!deferredInstall) return;
+    installBtn.hidden = true;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+  });
+}
+window.addEventListener('appinstalled', () => {
+  deferredInstall = null;
+  if(installBtn) installBtn.hidden = true;
+});
 
 const off = document.getElementById('offline');
 function netState(){
