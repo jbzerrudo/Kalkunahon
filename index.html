@@ -546,7 +546,7 @@ const TC_SCALES = [
     bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
             {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
             {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
+  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR',
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
     // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
@@ -2473,9 +2473,11 @@ card('ref', {
      ['JMA / RSMC Tokyo','NW Pacific','<b>10-minute</b>','JMA RSMC advisory notes'],
      ['BOM','Australian region','<b>10-minute</b> mean + 3-s gust','WMO IWTC-VII, not BOM directly'],
      ['RSMC La Réunion','SW Indian Ocean','<b>10-minute</b>','WMO IWTC-VII'],
-     ['PAGASA','Philippine AoR','<b>10-minute</b>','PAGASA operational practice, following WMO guidance. Not stated on PAGASA’s public pages, so a reader cannot confirm it from the website alone.'],
-     ['IMD','N Indian Ocean','3-minute <span class="chip w">unverified</span>','Widely reported, not confirmed from IMD'],
-     ['CMA','NW Pacific','2-minute <span class="chip w">unverified</span>','Not confirmed from any reachable source']]
+     ['PAGASA','PAR','<b>10-minute</b>','PAGASA operational practice, following WMO guidance. Not stated on PAGASA’s public pages, so a reader cannot confirm it from the website alone.'],
+     ['HKO','NW Pacific','<b>10-minute</b>','IBTrACS v04r01 Technical Details, Table 3'],
+     ['KMA','NW Pacific','<b>10-minute</b>','IBTrACS v04r01 Technical Details, Table 3'],
+     ['IMD','N Indian Ocean','<b>3-minute</b>','IBTrACS v04r01 Technical Details, Table 3'],
+     ['CMA','NW Pacific','<b>2-minute</b>','IBTrACS v04r01 Technical Details, Table 3']]
   )}; },
   src:'JTWC states the operational discrepancy in the reciprocal direction: “One-minute mean wind speeds are generally higher than ten-minute mean wind speeds by 14%” — that is 1/0.88, the legacy factor, not the 0.93 WMO now recommends.'
 });

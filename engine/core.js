@@ -120,7 +120,7 @@ const TC_SCALES = [
     bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
             {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
             {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
+  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR',
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
     // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
