@@ -17,11 +17,11 @@ and keep it on a USB stick.
 | Module | Contents |
 |---|---|
 | Wind & tropical cyclone | Exact speed unit conversions and Beaufort force; WMO Table 1.2 conversion between 1-minute and 10-minute sustained Vmax; WMO Table 1.1 gust factors; side-by-side classification on the NHC, JMA, PAGASA, BOM and IMD scales at their own averaging periods; Atkinson-Holliday and Knaff-Zehr pressure-wind relationships; u/v components; height adjustment to 10 m; wind power density |
-| Moisture & comfort | Humidity solver from temperature plus RH, dewpoint or wet-bulb; vapour pressure, mixing ratio, specific and absolute humidity, virtual temperature, frost point, ice-bulb; heat index, humidex, apparent temperature, wind chill; **UTCI** with mean radiant temperature; **ISO 7243 WBGT** and ISO 7726 radiant temperature from a black globe |
+| Moisture & comfort | Humidity solver from temperature plus RH, dewpoint or wet-bulb; vapour pressure, mixing ratio, specific and absolute humidity, virtual temperature, frost point, ice-bulb; heat index, humidex, apparent temperature, wind chill; **UTCI** with mean radiant temperature; **ISO 7243 WBGT** and ISO 7726 radiant temperature from a black globe; **outdoor WBGT by the Liljegren (2008) model** from radiation, wind and sun position, with the **KNMI hittekracht** 0-10 scale and the **ACGIH** work-rest screening limits |
 | Pressure & altitude | Pressure units; station pressure to MSL (QFF); QNH, QFE, QNE and pressure altitude; density altitude and moist air density; ISA state at height; hypsometric equation and thickness |
 | Thermodynamics | Potential, virtual and equivalent potential temperature; dry and saturated adiabatic lapse rates; LCL by Espy's rule and by the Romps (2017) exact solution; Lifted, Showalter, K, Total Totals and SWEAT indices |
 
-## Two things it is careful about
+## Some things it is careful about
 
 **The two WMO wind tables are not interchangeable.** Table 1.2 converts between agency
 estimates of peak storm intensity: at sea, `V(10-min) = 0.93 x V(1-min)`. Table 1.1 converts a
@@ -35,13 +35,29 @@ which is why they work in sun as well as shade. Where mean radiant temperature i
 app sets it equal to air temperature, states that this means shade or overcast or night, and
 warns that it understates heat stress in sun by roughly 7 to 9 °C.
 
+**Outdoor WBGT is not the shade approximation.** The Liljegren model solves iterative energy
+balances on a 50.8 mm black globe and a 7 mm wetted wick, so it needs global radiation, wind and
+the sun's position, not just temperature and humidity. Where no radiation measurement is
+available the app can work from clear sky instead, using the model's own ceiling of 85% of the
+top-of-atmosphere irradiance rather than a number chosen by hand, and says that this is an upper
+bound. Wind must be the 2 m value; Liljegren's stability-based adjustment from other heights is
+not implemented and the card says so.
+
+**Hittekracht has no official word labels, and the app does not invent any.** KNMI's technical
+report calls the 0-10 scale a communication scale and leaves interpretation to the reader, and
+the KNMI explainer declines to give per-level advice because the response depends on age,
+health, activity and clothing. The app therefore shows KNMI's own frequency statements instead
+of categories, and says explicitly where KNMI publishes nothing. The ACGIH work-rest limits
+shown alongside are a different standard for a different purpose: they screen occupational
+exposure for working adults, not the general public.
+
 **Intensity scales use different averaging periods.** A 10-minute 64 kt typhoon is roughly a
 1-minute 69 kt system. The scale comparison converts each scale to its own native period before
 classifying, and refuses to convert where WMO publishes no factor.
 
 ## Accuracy
 
-The calculation engine ships with 169 numerical assertions checked against published worked
+The calculation engine ships with 177 numerical assertions checked against published worked
 examples, including Stull's saturated adiabat (10 C, 70 kPa -> 4.58 K/km), Bolton's equivalent
 potential temperature, Romps' LCL values to sub-metre, the ECCC humidex worked example, NWS
 heat-index chart values, and the ISA tropopause at 226.32 hPa. The UTCI polynomial was checked

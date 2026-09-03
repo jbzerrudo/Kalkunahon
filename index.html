@@ -402,6 +402,11 @@ tr:last-child td{border-bottom:0}
             <li>NWS / Environment and Climate Change Canada, 2001 wind chill temperature index.</li>
             <li>Bröde, P. et al., 2012: <i>Int J Biometeorol</i> <b>56</b>, 481-494 — the UTCI operational procedure, from COST Action 730.</li>
             <li>ISO 7243:2017 — WBGT. ISO 7726 — mean radiant temperature from a black globe.</li>
+            <li>Liljegren, J.C., R.A. Carhart, P. Lawday, S. Tschopp and R. Sharp, 2008: <i>J Occup Environ Hyg</i> <b>5</b>, 645-655 — outdoor WBGT from standard meteorological measurements. Implemented from the author's reference C code (UChicago Argonne, MIT licence, github.com/mdljts/wbgt).</li>
+            <li>KNMI, 2026: <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i>, Technical Report TR-26-04 — Table 1 gives the hittekracht bands: 0 below 14 °C, then 2 °C steps, 10 at 32 °C and above.</li>
+            <li>KNMI, <i>Hittekracht</i>, knmi.nl/kennis-en-datacentrum/uitleg/hittekracht — the scale's purpose and how often each level occurs. <b>KNMI publishes no word label for any level</b>, stating that the response depends on age, health, activity and clothing.</li>
+            <li>Kong, Q. and M. Huber, 2022: <i>Earth's Future</i> <b>10</b>, e2021EF002334 — the WBGT implementation KNMI runs behind hittekracht.</li>
+            <li>ACGIH, 2026: <i>TLVs and BEIs</i>, p.242 — heat stress screening criteria, the Threshold Limit Value for acclimatised workers and the Action Limit for unacclimatised ones. Occupational screening for working adults, not public heat-health advice.</li>
             <li>Ministry of the Environment, Japan, <i>Heat Illness Prevention Information</i> — WBGT risk bands, after the Japan Sports Association guidebook (2019).</li>
             <li>Di Napoli, C., R. Hogan and F. Pappenberger, 2020: <i>Int J Biometeorol</i> <b>64</b>, 1233-1245 — mean radiant temperature in sun.</li>
             <li>Lu, Y.-C. and D.M. Romps, 2022: <i>J. Appl. Meteor. Climatol.</i> <b>61</b> — the extended heat index and the errors it corrects.</li>
@@ -2239,6 +2244,9 @@ card('moist', {
     {id:'t',   label:'Air temperature °C', type:'num', val:28, step:0.1},
     {id:'rh',  label:'Relative humidity %', type:'num', val:55, step:1},
     {id:'w',   label:'Wind at 2 m m/s', type:'num', val:3, step:0.1},
+    {id:'smode', label:'Global radiation', type:'sel', val:'val', wide:true,
+      opts:[['val','I have a measurement'],
+            ['clear','No measurement — assume clear sky, full sun']]},
     {id:'s',   label:'Global radiation W/m²', type:'num', val:750, step:10},
     {id:'p',   label:'Station pressure hPa', type:'num', val:1013.25, step:0.1},
     {id:'lat', label:'Latitude °N', type:'num', val:52.10, step:0.01},
@@ -2256,7 +2264,15 @@ card('moist', {
   compute(v){
     const d = new Date(Date.UTC(2026, (parseInt(v.mon,10)||1)-1, v.day||1,
                                 Math.floor(v.hr||0), Math.round(((v.hr||0)%1)*60)));
-    const r = M.wbgtLiljegren(v.t, v.rh, v.p, Math.max(v.w,0), v.s, d, v.lat, v.lon);
+    // Clear-sky mode invents nothing. It hands the model the top-of-atmosphere
+    // irradiance for this sun angle and lets Liljegren's own NORMSOLAR_MAX cap
+    // of 0.85 decide the surface value, exactly as it would for a measurement
+    // that came in too high.
+    const spc = M.ljSolarPosition(d, v.lat, v.lon);
+    const toa = M.LJ.SOLAR_CONST * Math.max(0, spc.cza) / (spc.soldist*spc.soldist);
+    const clear = v.smode === 'clear';
+    const solarIn = clear ? toa : v.s;
+    const r = M.wbgtLiljegren(v.t, v.rh, v.p, Math.max(v.w,0), solarIn, d, v.lat, v.lon);
     if(!r) return {rows: rowsOf([['hittekracht','—','','hero'],
       ['the iteration did not converge','','','hero txt']]),
       flag:'Liljegren&rsquo;s energy balance failed to converge for these inputs. Check that temperature, humidity and pressure are physically consistent.'};
@@ -2284,9 +2300,11 @@ card('moist', {
       ['psychrometric wet bulb', N(r.tpsy,1), '°C', 'dim'],
       ['solar elevation', N(r.elev,1), '°', 'dim'],
       ['direct beam fraction', N(r.fdir,3), '', 'dim'],
-      ['radiation used', N(r.solarUsed,0), 'W/m²', 'dim'],
+      ['radiation used', N(r.solarUsed,0), 'W/m²', clear ? '' : 'dim'],
+      ['top of atmosphere here', N(toa,0), 'W/m²', 'dim'],
       ['BOM approximation, no wind or sun', N(M.wbgtSimple(v.t, v.rh),2), '°C', 'dim']
     ];
+
     const acc = v.acc === '1';
     for(const [key,name] of [['light','light work'],['moderate','moderate work'],
                              ['heavy','heavy work'],['veryheavy','very heavy work']]){
@@ -2297,10 +2315,15 @@ card('moist', {
     if(r.elev <= 0) notes.push('The sun is below the horizon at this time and place, so the radiation term is zero whatever you entered.');
     else if(Math.abs(r.solarUsed - v.s) > 1) notes.push('Global radiation was adjusted from ' + N(v.s,0) +
       ' to ' + N(r.solarUsed,0) + ' W/m&sup2;, because the model caps the measured value at 85% of the top-of-atmosphere irradiance for this sun angle.');
+    if(clear && r.elev > 0) notes.push('No measurement was used. The radiation is ' + N(r.solarUsed,0) +
+      ' W/m&sup2;, which is 85% of the ' + N(toa,0) + ' W/m&sup2; reaching the top of the atmosphere at this sun angle. ' +
+      'That is the ceiling the model applies to any measurement, so it is a clear-sky upper bound: under cloud the real heat stress is lower.');
     if(v.w < 0.13) notes.push('Wind was raised to the 0.13 m/s floor the model requires; the convection correlations are not defined in still air.');
-    return {rows: rowsOf(rows), flag: notes.length ? notes.join(' ') : null};
+    return {rows: rowsOf(rows), flag: notes.length ? notes.join(' ') : null,
+            labels: {s: clear ? 'not needed in clear-sky mode' : 'Global radiation W/m²'},
+            disable: {s: clear}};
   },
-  src:'<b>Liljegren, J.C., Carhart, R.A., Lawday, P., Tschopp, S. and Sharp, R. (2008)</b>, <i>Modeling the Wet Bulb Globe Temperature Using Standard Meteorological Measurements</i>, J Occup Environ Hyg <b>5</b>, 645-655. Implemented from Liljegren&rsquo;s own reference C code (UChicago Argonne, LLC, 2008), redistributed under the MIT licence at github.com/mdljts/wbgt: iterative energy balances on a 50.8 mm black globe and a 7 mm wetted wick, with the direct beam split off by f<sub>dir</sub> = exp(3 &minus; 1.34&middot;n &minus; 1.65/n) on the normalised irradiance. The 0-10 banding is <b>KNMI Technical Report TR-26-04</b>, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i> (2026), Table 1: band 0 below 14 °C, then 2 °C steps to band 10 at 32 °C and above. KNMI publishes <b>no qualitative label for any level</b>: TR-26-04 calls hittekracht a communication scale and leaves interpretation to end users and professionals, and the KNMI explainer declines to give per-level advice because the response depends on age, health, activity and clothing. The frequency statements shown are KNMI&rsquo;s own: 8 or more is significant and occurs on about 2.3 days a year on average, 9 is rare and possible from 25 °C, 10 is extremely rare, and Dutch heatwaves between 1991 and 2024 usually sat at 6-7. Wind must be the 2 m value: Liljegren&rsquo;s stability-based adjustment from other measurement heights is <b>not</b> implemented here, so convert first if your anemometer sits at 10 m. KNMI runs this same model through the Kong and Huber (2022) port, so small differences from the KNMI app are expected. <br><br><b>The work allocation rows are a different standard and a different purpose.</b> They are the <b>ACGIH</b> heat-stress screening criteria, <i>2026 TLVs and BEIs</i>, p.242, as reproduced by the Canadian Centre for Occupational Health and Safety: the Threshold Limit Value for acclimatised workers and the Action Limit for unacclimatised ones, assuming an 8-hour day in a 5-day week with conventional breaks. They screen <b>occupational exposure for working adults</b> and say nothing about the general public, which is what hittekracht addresses. Where the published table has no entry for a workload at a given allocation, no value is shown rather than one inferred. ISO 7243 covers the same ground with its own reference values, which are not reproduced here.'
+  src:'<b>Liljegren, J.C., Carhart, R.A., Lawday, P., Tschopp, S. and Sharp, R. (2008)</b>, <i>Modeling the Wet Bulb Globe Temperature Using Standard Meteorological Measurements</i>, J Occup Environ Hyg <b>5</b>, 645-655. Implemented from Liljegren&rsquo;s own reference C code (UChicago Argonne, LLC, 2008), redistributed under the MIT licence at github.com/mdljts/wbgt: iterative energy balances on a 50.8 mm black globe and a 7 mm wetted wick, with the direct beam split off by f<sub>dir</sub> = exp(3 &minus; 1.34&middot;n &minus; 1.65/n) on the normalised irradiance. The 0-10 banding is <b>KNMI Technical Report TR-26-04</b>, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i> (2026), Table 1: band 0 below 14 °C, then 2 °C steps to band 10 at 32 °C and above. KNMI publishes <b>no qualitative label for any level</b>: TR-26-04 calls hittekracht a communication scale and leaves interpretation to end users and professionals, and the KNMI explainer declines to give per-level advice because the response depends on age, health, activity and clothing. The frequency statements shown are KNMI&rsquo;s own: 8 or more is significant and occurs on about 2.3 days a year on average, 9 is rare and possible from 25 °C, 10 is extremely rare, and Dutch heatwaves between 1991 and 2024 usually sat at 6-7. Wind must be the 2 m value: Liljegren&rsquo;s stability-based adjustment from other measurement heights is <b>not</b> implemented here, so convert first if your anemometer sits at 10 m. KNMI runs this same model through the Kong and Huber (2022) port, so small differences from the KNMI app are expected. <br><br><b>Sources for the scale itself.</b> The banding: KNMI, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i>, Technical Report TR-26-04 (2026), Table 1, at knmi.nl/kennis-en-datacentrum/publicatie/van-wet-bulb-globe-temperature-wbgt-naar-hittekracht. The frequency statements: KNMI, <i>Hittekracht</i>, knmi.nl/kennis-en-datacentrum/uitleg/hittekracht. The underlying WBGT method KNMI uses: Kong, Q. and Huber, M. (2022), <i>Explicit Calculations of Wet-Bulb Globe Temperature Compared With Approximations and Why It Matters for Labor Productivity</i>, Earth&rsquo;s Future <b>10</b>, e2021EF002334. <br><br><b>The work allocation rows are a different standard and a different purpose.</b> They are the <b>ACGIH</b> heat-stress screening criteria, <i>2026 TLVs and BEIs</i>, p.242, as reproduced by the Canadian Centre for Occupational Health and Safety: the Threshold Limit Value for acclimatised workers and the Action Limit for unacclimatised ones, assuming an 8-hour day in a 5-day week with conventional breaks. They screen <b>occupational exposure for working adults</b> and say nothing about the general public, which is what hittekracht addresses. Where the published table has no entry for a workload at a given allocation, no value is shown rather than one inferred. ISO 7243 covers the same ground with its own reference values, which are not reproduced here. <br><br><b>No UTCI is derived here, deliberately.</b> It is tempting to feed the computed globe temperature into ISO 7726 and get a mean radiant temperature for free. It does not work: Liljegren&rsquo;s 50.8 mm globe and ISO 7726&rsquo;s forced-convection formula use different convection correlations, so the round trip returns a T<sub>mrt</sub> far above anything physical. For UTCI, use the UTCI card with a black-globe reading or a modelled T<sub>mrt</sub>.'
 });
 
 
@@ -2767,6 +2790,24 @@ const tbl = (head, rows, tight) =>
   '<div class="scroll'+(tight?' tight':'')+'"><table><thead><tr>'+head.map(h=>'<th'+(h[1]?' class="num"':'')+'>'+h[0]+'</th>').join('')+
   '</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,i)=>'<td'+(head[i]&&head[i][1]?' class="num"':'')+'>'+c+'</td>').join('')+'</tr>').join('')+
   '</tbody></table></div>';
+
+card('ref', {
+  title:'KNMI hittekracht scale',
+  compute(){
+    const B = [['0','&lt; 14'],['1','14 - 16'],['2','16 - 18'],['3','18 - 20'],['4','20 - 22'],
+               ['5','22 - 24'],['6','24 - 26'],['7','26 - 28'],['8','28 - 30'],['9','30 - 32'],
+               ['10','&ge; 32']];
+    return {html: tbl([['Hittekracht',1],['WBGT °C',1]], B)
+      + '<div class="rule">Reproduced from <b>Tabel 1: De hittekracht schaalverdeling</b>, KNMI Technical Report TR-26-04. '
+      + 'Bands are 2 °C wide throughout, so the scale is linear in WBGT rather than in perceived severity. '
+      + '<b>KNMI attaches no words to any level.</b> The report calls this a communication scale and leaves interpretation '
+      + 'to the reader; the KNMI explainer declines to give per-level advice because the response depends on age, health, '
+      + 'activity and clothing. What KNMI does publish is how often each level occurs: 8 or more is significant and happens '
+      + 'on about 2.3 days a year on average, 9 is rare and possible from an air temperature as low as 25 °C, 10 is extremely '
+      + 'rare, and Dutch heatwaves between 1991 and 2024 usually sat at 6 to 7.</div>'};
+  },
+  src:'KNMI, 2026: <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i>, Technical Report TR-26-04, Table 1. The WBGT it bands is the outdoor value from Liljegren (2008), which KNMI computes with the Kong and Huber (2022) implementation. See the hittekracht calculator in <b>Moisture &amp; comfort</b>.'
+});
 
 card('ref', {
   title:'Operational averaging periods by agency',
