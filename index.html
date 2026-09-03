@@ -350,6 +350,16 @@ tr:last-child td{border-bottom:0}
       <div class="grid" id="g-thermo"></div>
     </section>
 
+    <section class="mod" id="m-sun">
+      <div class="mod-head">
+        <h2>Sun &amp; day length</h2>
+        <p>Sunrise, sunset, the three twilights, solar noon and day length, from the same solar
+           position the outdoor WBGT uses. These are computed astronomy, not forecasts: only
+           refraction near the horizon carries real uncertainty.</p>
+      </div>
+      <div class="grid" id="g-sun"></div>
+    </section>
+
     <section class="mod" id="m-ref">
       <div class="mod-head">
         <h2>Reference</h2>
@@ -1390,14 +1400,17 @@ function ljSolarPosition(dateUTC, latDeg, lonDeg){
   const lmst = ((gmst + lonDeg/15) % 24 + 24) % 24;         // hours
   const ha = lmst*15*DEG - ra;                              // hour angle, rad
   const lat = latDeg*DEG;
-  let elev = Math.asin(Math.sin(lat)*Math.sin(dec) + Math.cos(lat)*Math.cos(dec)*Math.cos(ha)) / DEG;
+  const elevGeo = Math.asin(Math.sin(lat)*Math.sin(dec) + Math.cos(lat)*Math.cos(dec)*Math.cos(ha)) / DEG;
   let refr;                                                  // degrees
-  if(elev > 15)        refr = 0.00452*3.51561/Math.tan(elev*DEG);
-  else if(elev > -0.56) refr = 3.51561*(0.1594 + 0.0196*elev + 0.00002*elev*elev)
-                               /(1 + 0.505*elev + 0.0845*elev*elev);
+  if(elevGeo > 15)        refr = 0.00452*3.51561/Math.tan(elevGeo*DEG);
+  else if(elevGeo > -0.56) refr = 3.51561*(0.1594 + 0.0196*elevGeo + 0.00002*elevGeo*elevGeo)
+                               /(1 + 0.505*elevGeo + 0.0845*elevGeo*elevGeo);
   else                 refr = 0.56;
-  elev += refr;
-  return { cza: Math.cos((90 - elev)*DEG), elev: elev, soldist: soldist };
+  const elev = elevGeo + refr;
+  // elev is apparent, which is what the radiation terms want. elevGeo is the
+  // geometric centre, which is what rise, set and twilight are defined on: the
+  // standard -0.833 deg and -6/-12/-18 thresholds already carry refraction.
+  return { cza: Math.cos((90 - elev)*DEG), elev: elev, elevGeo: elevGeo, soldist: soldist };
 }
 
 /* --- normalise the measured global radiation against top-of-atmosphere and
@@ -1462,13 +1475,100 @@ const ACGIH_WBGT = {
     veryheavy:  [                                         ['25-50% work',24.5],['0-25% work',27.0]]
   }
 };
-/* Least restrictive allocation whose limit is not exceeded, or null if the
-   WBGT is above every tabulated limit for that workload. */
+/* Least restrictive allocation whose limit is not exceeded, or null if the WBGT
+   is above every tabulated limit for that workload.
+
+   ACGIH tabulates no continuous-work entry for heavy or very heavy workloads.
+   Below the lowest limit for those, the table imposes nothing at all, so the
+   result is marked untabulated rather than reported as the most permissive row
+   that happens to exist. Returning "50-75% work" at a WBGT of 18 would invent a
+   restriction the standard never makes. */
 function acgihAllocation(wbgt, workload, acclimatised){
   const rows = ACGIH_WBGT[acclimatised ? 'acclimatised' : 'unacclimatised'][workload];
-  if(!rows) return null;
-  for(const [label, limit] of rows) if(wbgt <= limit) return {label: label, limit: limit};
+  if(!rows || !rows.length) return null;
+  const hasContinuous = rows[0][0] === 'continuous';
+  for(const [label, limit] of rows){
+    if(wbgt <= limit){
+      const untabulated = !hasContinuous && label === rows[0][0] && wbgt < rows[0][1];
+      return {label: label, limit: limit, untabulated: untabulated};
+    }
+  }
   return null;
+}
+
+/* --- 2.12 Sunrise, sunset, twilight and day length.
+       Found by bisecting the solar elevation from ljSolarPosition rather than
+       by a separate rise/set formula, so there is only one piece of astronomy
+       in the engine and it is the one already checked against known geometry.
+       The search window is centred on local solar noon, 12h - lon/15, so it
+       follows the local day rather than the UTC day. Standard thresholds:
+       -0.833 deg for the disc's upper limb with refraction, then -6, -12 and
+       -18 for civil, nautical and astronomical twilight. --- */
+const SUN_EVENTS = [
+  ['rise',        -0.833], ['civil',  -6], ['nautical', -12], ['astronomical', -18]
+];
+
+function solarElevationAt(ms, latDeg, lonDeg){
+  return ljSolarPosition(new Date(ms), latDeg, lonDeg).elevGeo;
+}
+
+/* bisect for the instant elevation crosses h between t0 and t1 (ms) */
+function crossTime(t0, t1, h, lat, lon){
+  let a = t0, b = t1;
+  const fa = solarElevationAt(a, lat, lon) - h;
+  for(let i = 0; i < 40; i++){
+    const m = 0.5*(a + b);
+    const fm = solarElevationAt(m, lat, lon) - h;
+    if((fa < 0) === (fm < 0)) a = m; else b = m;
+  }
+  return 0.5*(a + b);
+}
+
+function sunTimes(dateUTC, latDeg, lonDeg){
+  const day = Date.UTC(dateUTC.getUTCFullYear(), dateUTC.getUTCMonth(), dateUTC.getUTCDate());
+  const noonGuess = day + (12 - lonDeg/15)*3600e3;      // local solar noon, roughly
+  const step = 5*60e3;                                   // 5 minute scan
+  const t0 = noonGuess - 12*3600e3, t1 = noonGuess + 12*3600e3;
+
+  // true solar noon: coarsest maximum, then ternary refine
+  let best = t0, bestE = -999;
+  for(let t = t0; t <= t1; t += step){
+    const e = solarElevationAt(t, latDeg, lonDeg);
+    if(e > bestE){ bestE = e; best = t; }
+  }
+  let lo = best - step, hi = best + step;
+  for(let i = 0; i < 60; i++){
+    const m1 = lo + (hi - lo)/3, m2 = hi - (hi - lo)/3;
+    if(solarElevationAt(m1, latDeg, lonDeg) < solarElevationAt(m2, latDeg, lonDeg)) lo = m1; else hi = m2;
+  }
+  const noon = 0.5*(lo + hi);
+  const noonElev = solarElevationAt(noon, latDeg, lonDeg);
+
+  // lowest elevation in the window, for the polar cases
+  let minE = 999;
+  for(let t = t0; t <= t1; t += step){
+    const e = solarElevationAt(t, latDeg, lonDeg);
+    if(e < minE) minE = e;
+  }
+
+  const out = { noon: new Date(noon), noonElev: noonElev, maxElev: noonElev, minElev: minE,
+                maxElevApparent: ljSolarPosition(new Date(noon), latDeg, lonDeg).elev };
+  for(const [name, h] of SUN_EVENTS){
+    if(noonElev < h){ out[name] = {up: null, down: null, state: 'never above'}; continue; }
+    if(minE > h){    out[name] = {up: null, down: null, state: 'never below'}; continue; }
+    // scan each side of noon for the sign change
+    let up = null, down = null;
+    for(let t = noon; t > t0; t -= step){
+      if(solarElevationAt(t - step, latDeg, lonDeg) - h < 0){ up = crossTime(t - step, t, h, latDeg, lonDeg); break; }
+    }
+    for(let t = noon; t < t1; t += step){
+      if(solarElevationAt(t + step, latDeg, lonDeg) - h < 0){ down = crossTime(t + step, t, h, latDeg, lonDeg); break; }
+    }
+    out[name] = { up: up === null ? null : new Date(up),
+                  down: down === null ? null : new Date(down), state: 'normal' };
+  }
+  out.dayLength = (out.rise.up && out.rise.down) ? (out.rise.down - out.rise.up)/3600e3 : null;
+  return out;
 }
 
 /* =====================================================================
@@ -1684,6 +1784,7 @@ const API = {
   humidex,apparentTempBOM,wbgtSimple,
   LJ,ljSolarPosition,ljSolarParameters,wbgtLiljegren,hittekracht,
   ACGIH_WBGT,acgihAllocation,
+  SUN_EVENTS,sunTimes,
   utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,WBGT_BANDS,wbgtBand,utciRangeIssues,
   PRESS,pressTo,isa,geometricToGeopotential,geopotentialToGeometric,
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
@@ -1713,6 +1814,7 @@ const MODULES = [
   {id:'moist',  label:'Moisture &amp; comfort'},
   {id:'press',  label:'Pressure &amp; altitude'},
   {id:'thermo', label:'Thermodynamics'},
+  {id:'sun',    label:'Sun &amp; day length'},
   {id:'ref',    label:'Reference'}
 ];
 const SPEED_OPTS = [['kt','knots'],['kmh','km/h'],['ms','m/s'],['mph','mph'],['fts','ft/s']];
@@ -2306,10 +2408,14 @@ card('moist', {
     ];
 
     const acc = v.acc === '1';
+    let anyUntab = false;
     for(const [key,name] of [['light','light work'],['moderate','moderate work'],
                              ['heavy','heavy work'],['veryheavy','very heavy work']]){
       const a = M.acgihAllocation(r.wbgt, key, acc);
-      rows.push([name, a ? a.label : 'above every tabulated limit', '', a ? '' : 'dim']);
+      if(!a){ rows.push([name, 'above every tabulated limit', '', 'dim']); continue; }
+      if(a.untabulated){ anyUntab = true;
+        rows.push([name, 'no limit below ' + N(a.limit,1) + ' °C', '', 'dim']); continue; }
+      rows.push([name, a.label, '', '']);
     }
     const notes = [];
     if(r.elev <= 0) notes.push('The sun is below the horizon at this time and place, so the radiation term is zero whatever you entered.');
@@ -2318,6 +2424,7 @@ card('moist', {
     if(clear && r.elev > 0) notes.push('No measurement was used. The radiation is ' + N(r.solarUsed,0) +
       ' W/m&sup2;, which is 85% of the ' + N(toa,0) + ' W/m&sup2; reaching the top of the atmosphere at this sun angle. ' +
       'That is the ceiling the model applies to any measurement, so it is a clear-sky upper bound: under cloud the real heat stress is lower.');
+    if(anyUntab) notes.push('ACGIH tabulates no continuous-work entry for heavy or very heavy workloads, so below the lowest limit for those the table imposes no restriction at all. Those rows therefore give the WBGT at which a limit first appears, rather than naming the most permissive row that happens to exist, which would read as a restriction the standard does not set.');
     if(v.w < 0.13) notes.push('Wind was raised to the 0.13 m/s floor the model requires; the convection correlations are not defined in still air.');
     return {rows: rowsOf(rows), flag: notes.length ? notes.join(' ') : null,
             labels: {s: clear ? 'not needed in clear-sky mode' : 'Global radiation W/m²'},
@@ -2790,6 +2897,48 @@ const tbl = (head, rows, tight) =>
   '<div class="scroll'+(tight?' tight':'')+'"><table><thead><tr>'+head.map(h=>'<th'+(h[1]?' class="num"':'')+'>'+h[0]+'</th>').join('')+
   '</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((c,i)=>'<td'+(head[i]&&head[i][1]?' class="num"':'')+'>'+c+'</td>').join('')+'</tr>').join('')+
   '</tbody></table></div>';
+
+
+card('sun', {
+  title:'Sunrise, sunset, twilight and day length',
+  span:true, cols:true,
+  fields:[
+    {id:'lat', label:'Latitude °N', type:'num', val:14.60, step:0.01},
+    {id:'lon', label:'Longitude °E', type:'num', val:120.98, step:0.01},
+    {id:'yr',  label:'Year', type:'num', val:2026, step:1},
+    {id:'mon', label:'Month', type:'sel', val:'9',
+      opts:[['1','January'],['2','February'],['3','March'],['4','April'],['5','May'],
+            ['6','June'],['7','July'],['8','August'],['9','September'],['10','October'],
+            ['11','November'],['12','December']]},
+    {id:'day', label:'Day of month', type:'num', val:4, step:1},
+    {id:'tz',  label:'Hours from UTC', type:'num', val:8, step:0.25}
+  ],
+  rule:'These are not forecasts. Rise and set are computed from the sun\'s position and depend on no weather prediction at all. The only real uncertainty is refraction near the horizon, which varies with the actual temperature profile and can move the times by a minute or so on an unusual day. <b>Day length is the figure agrometeorology usually wants</b>, since photoperiod drives crop phenology.',
+  compute(v){
+    const d = new Date(Date.UTC(v.yr||2026, (parseInt(v.mon,10)||1)-1, v.day||1));
+    const r = M.sunTimes(d, v.lat, v.lon);
+    const off = (v.tz||0)*3600e3;
+    const T = x => x ? new Date(x.getTime()+off).toISOString().slice(11,16) : '—';
+    const span = (e,a,b) => e.state !== 'normal' ? e.state : (T(e.up)+' – '+T(e.down));
+    const hm = h => h==null ? '—' : (Math.floor(h)+' h '+String(Math.round((h%1)*60)).padStart(2,'0')+' m');
+    const rows = [
+      ['sunrise', T(r.rise.up), '', 'hero'],
+      ['sunset',  T(r.rise.down), '', 'hero'],
+      ['day length', hm(r.dayLength), '', 'hero'],
+      ['solar noon', T(r.noon), ''],
+      ['sun elevation at noon', N(r.maxElev,1), '°'],
+      ['civil twilight', span(r.civil), '', 'dim'],
+      ['nautical twilight', span(r.nautical), '', 'dim'],
+      ['astronomical twilight', span(r.astronomical), '', 'dim'],
+      ['lowest elevation of the night', N(r.minElev,1), '°', 'dim']
+    ];
+    const notes = [];
+    if(r.rise.state !== 'normal') notes.push('The sun ' + r.rise.state + ' the horizon on this date at this latitude, so there is no sunrise or sunset to report.');
+    if(r.astronomical.state === 'never below') notes.push('Astronomical twilight never ends: the sky does not reach full darkness at this latitude on this date.');
+    return {rows: rowsOf(rows), flag: notes.length ? notes.join(' ') : null};
+  },
+  src:'Computed by bisecting the solar elevation from the same Astronomical Almanac position used by the WBGT calculator, rather than from a separate rise/set formula, so there is one piece of astronomy in the engine and it is the one checked against known geometry. Thresholds are the standard ones on the <b>geometric</b> centre of the sun: <b>−0.833°</b> for rise and set, which allows 16′ for the solar semi-diameter and 34′ for mean refraction, then <b>−6°, −12° and −18°</b> for civil, nautical and astronomical twilight. The search window is centred on local solar noon so it follows the local day rather than the UTC day. Checked against published tables: De Bilt on the June solstice gives 05:18 and 22:03 CEST with a day length of 16 h 45 m, and Manila on the same date 05:28 and 18:27 PHT.'
+});
 
 card('ref', {
   title:'KNMI hittekracht scale',
