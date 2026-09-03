@@ -120,7 +120,7 @@ const TC_SCALES = [
     bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
             {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
             {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR',
+  { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
     // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
@@ -808,6 +808,238 @@ function utciRangeIssues(ta, tmrt, v10, rh){
   return out;
 }
 
+/* --- 2.10 Outdoor WBGT (Liljegren) and KNMI hittekracht.
+       Ported from the reference C implementation by James C. Liljegren
+       (UChicago Argonne, LLC, 2008), distributed under the MIT licence at
+       github.com/mdljts/wbgt. Method: Liljegren JC, Carhart RA, Lawday P,
+       Tschopp S, Sharp R (2008), Modeling the Wet Bulb Globe Temperature
+       Using Standard Meteorological Measurements, J Occup Environ Hyg
+       5:645-655. Hittekracht bands from KNMI Technical Report TR-26-04,
+       "Van Wet Bulb Globe Temperature (WBGT) naar hittekracht", Table 1.
+       Wind must be the 2 m value; Liljegren's stability-based adjustment
+       from other heights is not implemented. --- */
+const LJ = {
+  SOLAR_CONST: 1367.0,
+  STEFANB: 5.6696e-8,
+  Cp: 1003.5,
+  M_AIR: 28.97,
+  M_H2O: 18.015,
+  R_GAS: 8314.34,
+  EMIS_WICK: 0.95, ALB_WICK: 0.4, D_WICK: 0.007, L_WICK: 0.0254,
+  EMIS_GLOBE: 0.95, ALB_GLOBE: 0.05, D_GLOBE: 0.0508,
+  EMIS_SFC: 0.999, ALB_SFC: 0.45,
+  CZA_MIN: 0.00873, NORMSOLAR_MAX: 0.85,
+  MIN_SPEED: 0.13, CONVERGENCE: 0.02, MAX_ITER: 500
+};
+LJ.R_AIR = LJ.R_GAS / LJ.M_AIR;                 // 286.9 J/(kg K)
+LJ.Pr    = LJ.Cp / (LJ.Cp + 1.25 * LJ.R_AIR);   // Prandtl number
+LJ.RATIO = LJ.Cp * LJ.M_AIR / LJ.M_H2O;
+
+const DEG = Math.PI / 180;
+
+/* --- air properties. Tair in K, Pair in hPa --- */
+function ljViscosity(Tair){
+  const sigma = 3.617, eps_kappa = 97.0;
+  const Tr = Tair / eps_kappa;
+  const omega = (Tr - 2.9) / 0.4 * (-0.034) + 1.048;
+  return 2.6693e-6 * Math.sqrt(LJ.M_AIR * Tair) / (sigma * sigma * omega);
+}
+function ljThermalCond(Tair){
+  return (LJ.Cp + 1.25 * LJ.R_AIR) * ljViscosity(Tair);
+}
+function ljDiffusivity(Tair, Pair){
+  const Pcrit_air = 36.4, Pcrit_h2o = 218.0,
+        Tcrit_air = 132.0, Tcrit_h2o = 647.3,
+        a = 3.640e-4, b = 2.334;
+  const Pcrit13  = Math.pow(Pcrit_air * Pcrit_h2o, 1/3);
+  const Tcrit512 = Math.pow(Tcrit_air * Tcrit_h2o, 5/12);
+  const Tcrit12  = Math.sqrt(Tcrit_air * Tcrit_h2o);
+  const Mmix = Math.sqrt(1/LJ.M_AIR + 1/LJ.M_H2O);
+  const Patm = Pair / 1013.25;
+  return a * Math.pow(Tair/Tcrit12, b) * Pcrit13 * Tcrit512 * Mmix / Patm * 1e-4;
+}
+/* saturation vapour pressure, hPa. phase 0 = over water, 1 = over ice */
+function ljEsat(tk, phase){
+  let y, es;
+  if(phase === 0){ y = (tk - 273.15)/(tk - 32.18);  es = 6.1121 * Math.exp(17.502 * y); }
+  else           { y = (tk - 273.15)/(tk - 0.6);    es = 6.1115 * Math.exp(22.452 * y); }
+  return 1.004 * es;
+}
+function ljDewPoint(e, phase){
+  let z, tdk;
+  if(phase === 0){ z = Math.log(e / (6.1121*1.004)); tdk = 273.15 + 240.97*z/(17.502 - z); }
+  else           { z = Math.log(e / (6.1115*1.004)); tdk = 273.15 + 272.55*z/(22.452 - z); }
+  return tdk;
+}
+function ljEmisAtm(Tair, rh){          // rh as a fraction
+  const e = rh * ljEsat(Tair, 0);
+  return 0.575 * Math.pow(e, 0.143);
+}
+function ljEvap(Tair){
+  return (313.15 - Tair)/30 * (-71100) + 2.4073e6;
+}
+function ljHSphere(diameter, Tair, Pair, speed){
+  const density = Pair * 100 / (LJ.R_AIR * Tair);
+  const Re = Math.max(speed, LJ.MIN_SPEED) * density * diameter / ljViscosity(Tair);
+  const Nu = 2.0 + 0.6 * Math.sqrt(Re) * Math.pow(LJ.Pr, 0.3333);
+  return Nu * ljThermalCond(Tair) / diameter;
+}
+function ljHCylinder(diameter, length, Tair, Pair, speed){
+  const a = 0.56, b = 0.281, c = 0.4;
+  const density = Pair * 100 / (LJ.R_AIR * Tair);
+  const Re = Math.max(speed, LJ.MIN_SPEED) * density * diameter / ljViscosity(Tair);
+  const Nu = b * Math.pow(Re, 1 - c) * Math.pow(LJ.Pr, 1 - a);
+  return Nu * ljThermalCond(Tair) / diameter;
+}
+
+/* --- globe temperature, returns degC or NaN if it will not converge --- */
+function ljTglobe(Tair, rh, Pair, speed, solar, fdir, cza){
+  const Tsfc = Tair;
+  let Tprev = Tair, Tnew = Tair, converged = false, iter = 0;
+  do {
+    iter++;
+    const Tref = 0.5 * (Tprev + Tair);
+    const h = ljHSphere(LJ.D_GLOBE, Tref, Pair, speed);
+    Tnew = Math.pow(
+        0.5 * (ljEmisAtm(Tair, rh)*Math.pow(Tair,4) + LJ.EMIS_SFC*Math.pow(Tsfc,4))
+      - h/(LJ.STEFANB*LJ.EMIS_GLOBE) * (Tprev - Tair)
+      + solar/(2*LJ.STEFANB*LJ.EMIS_GLOBE) * (1 - LJ.ALB_GLOBE)
+        * (fdir*(1/(2*cza) - 1) + 1 + LJ.ALB_SFC)
+      , 0.25);
+    if(Math.abs(Tnew - Tprev) < LJ.CONVERGENCE) converged = true;
+    Tprev = 0.9*Tprev + 0.1*Tnew;
+  } while(!converged && iter < LJ.MAX_ITER);
+  return converged ? Tnew - 273.15 : NaN;
+}
+
+/* --- wet bulb. rad=1 natural (with radiation), rad=0 psychrometric --- */
+function ljTwb(Tair, rh, Pair, speed, solar, fdir, cza, rad){
+  const a = 0.56;                       // Bedingfield and Drew
+  const Tsfc = Tair;
+  const sza = Math.acos(cza);
+  const eair = rh * ljEsat(Tair, 0);
+  let Tprev = ljDewPoint(eair, 0), Tnew = Tprev, converged = false, iter = 0;
+  do {
+    iter++;
+    const Tref = 0.5 * (Tprev + Tair);
+    const h = ljHCylinder(LJ.D_WICK, LJ.L_WICK, Tref, Pair, speed);
+    const Fatm = LJ.STEFANB * LJ.EMIS_WICK *
+        (0.5*(ljEmisAtm(Tair,rh)*Math.pow(Tair,4) + LJ.EMIS_SFC*Math.pow(Tsfc,4)) - Math.pow(Tprev,4))
+      + (1 - LJ.ALB_WICK) * solar *
+        ((1 - fdir)*(1 + 0.25*LJ.D_WICK/LJ.L_WICK)
+         + fdir*((Math.tan(sza)/Math.PI) + 0.25*LJ.D_WICK/LJ.L_WICK) + LJ.ALB_SFC);
+    const ewick = ljEsat(Tprev, 0);
+    const density = Pair * 100 / (LJ.R_AIR * Tref);
+    const Sc = ljViscosity(Tref) / (density * ljDiffusivity(Tref, Pair));
+    Tnew = Tair - ljEvap(Tref)/LJ.RATIO * (ewick - eair)/(Pair - ewick)
+           * Math.pow(LJ.Pr/Sc, a) + (Fatm/h * rad);
+    if(Math.abs(Tnew - Tprev) < LJ.CONVERGENCE) converged = true;
+    Tprev = 0.9*Tprev + 0.1*Tnew;
+  } while(!converged && iter < LJ.MAX_ITER);
+  return converged ? Tnew - 273.15 : NaN;
+}
+
+/* --- solar position. Astronomical Almanac low-precision formulae, the same
+       set used by Liljegren's solarposition(). Refraction uses the standard
+       Michalsky correction. Returns cosine of the zenith angle, solar
+       elevation in degrees, and the Earth-Sun distance in AU. --- */
+function ljSolarPosition(dateUTC, latDeg, lonDeg){
+  const jd = dateUTC.getTime()/86400000 + 2440587.5;
+  const d  = jd - 2451545.0;                       // days from J2000.0
+  const g  = (357.528 + 0.9856003*d) * DEG;        // mean anomaly
+  const L  = (280.460 + 0.9856474*d) * DEG;        // mean longitude
+  const lam = L + (1.915*Math.sin(g) + 0.020*Math.sin(2*g)) * DEG;
+  const eps = (23.439 - 4.0e-7*d) * DEG;           // obliquity
+  const soldist = 1.00014 - 0.01671*Math.cos(g) - 0.00014*Math.cos(2*g);
+  const ra  = Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
+  const dec = Math.asin(Math.sin(eps)*Math.sin(lam));
+  // Greenwich mean sidereal time, hours
+  let gmst = 18.697374558 + 24.06570982441908*d;
+  gmst = ((gmst % 24) + 24) % 24;
+  const lmst = ((gmst + lonDeg/15) % 24 + 24) % 24;         // hours
+  const ha = lmst*15*DEG - ra;                              // hour angle, rad
+  const lat = latDeg*DEG;
+  let elev = Math.asin(Math.sin(lat)*Math.sin(dec) + Math.cos(lat)*Math.cos(dec)*Math.cos(ha)) / DEG;
+  let refr;                                                  // degrees
+  if(elev > 15)        refr = 0.00452*3.51561/Math.tan(elev*DEG);
+  else if(elev > -0.56) refr = 3.51561*(0.1594 + 0.0196*elev + 0.00002*elev*elev)
+                               /(1 + 0.505*elev + 0.0845*elev*elev);
+  else                 refr = 0.56;
+  elev += refr;
+  return { cza: Math.cos((90 - elev)*DEG), elev: elev, soldist: soldist };
+}
+
+/* --- normalise the measured global radiation against top-of-atmosphere and
+       split it into direct and diffuse, exactly as calc_solar_parameters() --- */
+function ljSolarParameters(solar, cza, soldist){
+  let fdir = 0, s = solar;
+  let toasolar = LJ.SOLAR_CONST * Math.max(0, cza) / (soldist*soldist);
+  if(cza < LJ.CZA_MIN) toasolar = 0;
+  if(toasolar > 0){
+    const normsolar = Math.min(s/toasolar, LJ.NORMSOLAR_MAX);
+    s = normsolar * toasolar;
+    if(normsolar > 0){
+      fdir = Math.exp(3 - 1.34*normsolar - 1.65/normsolar);
+      fdir = Math.max(Math.min(fdir, 0.9), 0.0);
+    }
+  }
+  return { solar: s, fdir: fdir };
+}
+
+/* --- outdoor WBGT. tC degC, rh %, pHpa hPa, wind m/s AT 2 m, solar W/m2 --- */
+function wbgtLiljegren(tC, rh, pHpa, wind2m, solarWm2, dateUTC, latDeg, lonDeg){
+  const sp = ljSolarPosition(dateUTC, latDeg, lonDeg);
+  const sc = ljSolarParameters(solarWm2, sp.cza, sp.soldist);
+  const tk = tC + 273.15, rhf = rh/100;
+  const cza = Math.max(sp.cza, LJ.CZA_MIN);   // guard the 1/(2*cza) term at night
+  const Tg   = ljTglobe(tk, rhf, pHpa, wind2m, sc.solar, sc.fdir, cza);
+  const Tnwb = ljTwb(tk, rhf, pHpa, wind2m, sc.solar, sc.fdir, cza, 1);
+  const Tpsy = ljTwb(tk, rhf, pHpa, wind2m, sc.solar, sc.fdir, cza, 0);
+  if(!isFinite(Tg) || !isFinite(Tnwb)) return null;
+  return {
+    wbgt: 0.1*tC + 0.2*Tg + 0.7*Tnwb,
+    tg: Tg, tnwb: Tnwb, tpsy: Tpsy,
+    solarUsed: sc.solar, fdir: sc.fdir, cza: sp.cza, elev: sp.elev
+  };
+}
+
+/* --- KNMI hittekracht, 0 to 10. KNMI TR-26-04 Table 1. --- */
+function hittekracht(wbgt){
+  if(!isFinite(wbgt)) return NaN;
+  if(wbgt < 14) return 0;
+  if(wbgt >= 32) return 10;
+  return Math.floor((wbgt - 14)/2) + 1;
+}
+
+
+/* --- 2.11 ACGIH heat-stress screening limits. WBGT in degC against work
+       allocation per hour. TLV applies to acclimatised workers, the Action
+       Limit to unacclimatised. Values as published in ACGIH, 2026 TLVs and
+       BEIs, p.242, reproduced by CCOHS. Blank cells in the published table
+       are omitted here rather than guessed. --- */
+const ACGIH_WBGT = {
+  acclimatised: {
+    light:      [['continuous',31.0],['50-75% work',31.0],['25-50% work',32.0],['0-25% work',32.5]],
+    moderate:   [['continuous',28.0],['50-75% work',29.0],['25-50% work',30.0],['0-25% work',31.5]],
+    heavy:      [                    ['50-75% work',27.5],['25-50% work',29.0],['0-25% work',30.5]],
+    veryheavy:  [                                         ['25-50% work',28.0],['0-25% work',30.0]]
+  },
+  unacclimatised: {
+    light:      [['continuous',28.0],['50-75% work',28.5],['25-50% work',29.5],['0-25% work',30.0]],
+    moderate:   [['continuous',25.0],['50-75% work',26.0],['25-50% work',27.0],['0-25% work',29.0]],
+    heavy:      [                    ['50-75% work',24.0],['25-50% work',25.5],['0-25% work',28.0]],
+    veryheavy:  [                                         ['25-50% work',24.5],['0-25% work',27.0]]
+  }
+};
+/* Least restrictive allocation whose limit is not exceeded, or null if the
+   WBGT is above every tabulated limit for that workload. */
+function acgihAllocation(wbgt, workload, acclimatised){
+  const rows = ACGIH_WBGT[acclimatised ? 'acclimatised' : 'unacclimatised'][workload];
+  if(!rows) return null;
+  for(const [label, limit] of rows) if(wbgt <= limit) return {label: label, limit: limit};
+  return null;
+}
+
 /* =====================================================================
    3. PRESSURE & ALTITUDE
    ===================================================================== */
@@ -1019,6 +1251,8 @@ const API = {
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
   absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
   humidex,apparentTempBOM,wbgtSimple,
+  LJ,ljSolarPosition,ljSolarParameters,wbgtLiljegren,hittekracht,
+  ACGIH_WBGT,acgihAllocation,
   utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,WBGT_BANDS,wbgtBand,utciRangeIssues,
   PRESS,pressTo,isa,geometricToGeopotential,geopotentialToGeometric,
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,

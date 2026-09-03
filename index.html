@@ -1234,6 +1234,238 @@ function utciRangeIssues(ta, tmrt, v10, rh){
   return out;
 }
 
+/* --- 2.10 Outdoor WBGT (Liljegren) and KNMI hittekracht.
+       Ported from the reference C implementation by James C. Liljegren
+       (UChicago Argonne, LLC, 2008), distributed under the MIT licence at
+       github.com/mdljts/wbgt. Method: Liljegren JC, Carhart RA, Lawday P,
+       Tschopp S, Sharp R (2008), Modeling the Wet Bulb Globe Temperature
+       Using Standard Meteorological Measurements, J Occup Environ Hyg
+       5:645-655. Hittekracht bands from KNMI Technical Report TR-26-04,
+       "Van Wet Bulb Globe Temperature (WBGT) naar hittekracht", Table 1.
+       Wind must be the 2 m value; Liljegren's stability-based adjustment
+       from other heights is not implemented. --- */
+const LJ = {
+  SOLAR_CONST: 1367.0,
+  STEFANB: 5.6696e-8,
+  Cp: 1003.5,
+  M_AIR: 28.97,
+  M_H2O: 18.015,
+  R_GAS: 8314.34,
+  EMIS_WICK: 0.95, ALB_WICK: 0.4, D_WICK: 0.007, L_WICK: 0.0254,
+  EMIS_GLOBE: 0.95, ALB_GLOBE: 0.05, D_GLOBE: 0.0508,
+  EMIS_SFC: 0.999, ALB_SFC: 0.45,
+  CZA_MIN: 0.00873, NORMSOLAR_MAX: 0.85,
+  MIN_SPEED: 0.13, CONVERGENCE: 0.02, MAX_ITER: 500
+};
+LJ.R_AIR = LJ.R_GAS / LJ.M_AIR;                 // 286.9 J/(kg K)
+LJ.Pr    = LJ.Cp / (LJ.Cp + 1.25 * LJ.R_AIR);   // Prandtl number
+LJ.RATIO = LJ.Cp * LJ.M_AIR / LJ.M_H2O;
+
+const DEG = Math.PI / 180;
+
+/* --- air properties. Tair in K, Pair in hPa --- */
+function ljViscosity(Tair){
+  const sigma = 3.617, eps_kappa = 97.0;
+  const Tr = Tair / eps_kappa;
+  const omega = (Tr - 2.9) / 0.4 * (-0.034) + 1.048;
+  return 2.6693e-6 * Math.sqrt(LJ.M_AIR * Tair) / (sigma * sigma * omega);
+}
+function ljThermalCond(Tair){
+  return (LJ.Cp + 1.25 * LJ.R_AIR) * ljViscosity(Tair);
+}
+function ljDiffusivity(Tair, Pair){
+  const Pcrit_air = 36.4, Pcrit_h2o = 218.0,
+        Tcrit_air = 132.0, Tcrit_h2o = 647.3,
+        a = 3.640e-4, b = 2.334;
+  const Pcrit13  = Math.pow(Pcrit_air * Pcrit_h2o, 1/3);
+  const Tcrit512 = Math.pow(Tcrit_air * Tcrit_h2o, 5/12);
+  const Tcrit12  = Math.sqrt(Tcrit_air * Tcrit_h2o);
+  const Mmix = Math.sqrt(1/LJ.M_AIR + 1/LJ.M_H2O);
+  const Patm = Pair / 1013.25;
+  return a * Math.pow(Tair/Tcrit12, b) * Pcrit13 * Tcrit512 * Mmix / Patm * 1e-4;
+}
+/* saturation vapour pressure, hPa. phase 0 = over water, 1 = over ice */
+function ljEsat(tk, phase){
+  let y, es;
+  if(phase === 0){ y = (tk - 273.15)/(tk - 32.18);  es = 6.1121 * Math.exp(17.502 * y); }
+  else           { y = (tk - 273.15)/(tk - 0.6);    es = 6.1115 * Math.exp(22.452 * y); }
+  return 1.004 * es;
+}
+function ljDewPoint(e, phase){
+  let z, tdk;
+  if(phase === 0){ z = Math.log(e / (6.1121*1.004)); tdk = 273.15 + 240.97*z/(17.502 - z); }
+  else           { z = Math.log(e / (6.1115*1.004)); tdk = 273.15 + 272.55*z/(22.452 - z); }
+  return tdk;
+}
+function ljEmisAtm(Tair, rh){          // rh as a fraction
+  const e = rh * ljEsat(Tair, 0);
+  return 0.575 * Math.pow(e, 0.143);
+}
+function ljEvap(Tair){
+  return (313.15 - Tair)/30 * (-71100) + 2.4073e6;
+}
+function ljHSphere(diameter, Tair, Pair, speed){
+  const density = Pair * 100 / (LJ.R_AIR * Tair);
+  const Re = Math.max(speed, LJ.MIN_SPEED) * density * diameter / ljViscosity(Tair);
+  const Nu = 2.0 + 0.6 * Math.sqrt(Re) * Math.pow(LJ.Pr, 0.3333);
+  return Nu * ljThermalCond(Tair) / diameter;
+}
+function ljHCylinder(diameter, length, Tair, Pair, speed){
+  const a = 0.56, b = 0.281, c = 0.4;
+  const density = Pair * 100 / (LJ.R_AIR * Tair);
+  const Re = Math.max(speed, LJ.MIN_SPEED) * density * diameter / ljViscosity(Tair);
+  const Nu = b * Math.pow(Re, 1 - c) * Math.pow(LJ.Pr, 1 - a);
+  return Nu * ljThermalCond(Tair) / diameter;
+}
+
+/* --- globe temperature, returns degC or NaN if it will not converge --- */
+function ljTglobe(Tair, rh, Pair, speed, solar, fdir, cza){
+  const Tsfc = Tair;
+  let Tprev = Tair, Tnew = Tair, converged = false, iter = 0;
+  do {
+    iter++;
+    const Tref = 0.5 * (Tprev + Tair);
+    const h = ljHSphere(LJ.D_GLOBE, Tref, Pair, speed);
+    Tnew = Math.pow(
+        0.5 * (ljEmisAtm(Tair, rh)*Math.pow(Tair,4) + LJ.EMIS_SFC*Math.pow(Tsfc,4))
+      - h/(LJ.STEFANB*LJ.EMIS_GLOBE) * (Tprev - Tair)
+      + solar/(2*LJ.STEFANB*LJ.EMIS_GLOBE) * (1 - LJ.ALB_GLOBE)
+        * (fdir*(1/(2*cza) - 1) + 1 + LJ.ALB_SFC)
+      , 0.25);
+    if(Math.abs(Tnew - Tprev) < LJ.CONVERGENCE) converged = true;
+    Tprev = 0.9*Tprev + 0.1*Tnew;
+  } while(!converged && iter < LJ.MAX_ITER);
+  return converged ? Tnew - 273.15 : NaN;
+}
+
+/* --- wet bulb. rad=1 natural (with radiation), rad=0 psychrometric --- */
+function ljTwb(Tair, rh, Pair, speed, solar, fdir, cza, rad){
+  const a = 0.56;                       // Bedingfield and Drew
+  const Tsfc = Tair;
+  const sza = Math.acos(cza);
+  const eair = rh * ljEsat(Tair, 0);
+  let Tprev = ljDewPoint(eair, 0), Tnew = Tprev, converged = false, iter = 0;
+  do {
+    iter++;
+    const Tref = 0.5 * (Tprev + Tair);
+    const h = ljHCylinder(LJ.D_WICK, LJ.L_WICK, Tref, Pair, speed);
+    const Fatm = LJ.STEFANB * LJ.EMIS_WICK *
+        (0.5*(ljEmisAtm(Tair,rh)*Math.pow(Tair,4) + LJ.EMIS_SFC*Math.pow(Tsfc,4)) - Math.pow(Tprev,4))
+      + (1 - LJ.ALB_WICK) * solar *
+        ((1 - fdir)*(1 + 0.25*LJ.D_WICK/LJ.L_WICK)
+         + fdir*((Math.tan(sza)/Math.PI) + 0.25*LJ.D_WICK/LJ.L_WICK) + LJ.ALB_SFC);
+    const ewick = ljEsat(Tprev, 0);
+    const density = Pair * 100 / (LJ.R_AIR * Tref);
+    const Sc = ljViscosity(Tref) / (density * ljDiffusivity(Tref, Pair));
+    Tnew = Tair - ljEvap(Tref)/LJ.RATIO * (ewick - eair)/(Pair - ewick)
+           * Math.pow(LJ.Pr/Sc, a) + (Fatm/h * rad);
+    if(Math.abs(Tnew - Tprev) < LJ.CONVERGENCE) converged = true;
+    Tprev = 0.9*Tprev + 0.1*Tnew;
+  } while(!converged && iter < LJ.MAX_ITER);
+  return converged ? Tnew - 273.15 : NaN;
+}
+
+/* --- solar position. Astronomical Almanac low-precision formulae, the same
+       set used by Liljegren's solarposition(). Refraction uses the standard
+       Michalsky correction. Returns cosine of the zenith angle, solar
+       elevation in degrees, and the Earth-Sun distance in AU. --- */
+function ljSolarPosition(dateUTC, latDeg, lonDeg){
+  const jd = dateUTC.getTime()/86400000 + 2440587.5;
+  const d  = jd - 2451545.0;                       // days from J2000.0
+  const g  = (357.528 + 0.9856003*d) * DEG;        // mean anomaly
+  const L  = (280.460 + 0.9856474*d) * DEG;        // mean longitude
+  const lam = L + (1.915*Math.sin(g) + 0.020*Math.sin(2*g)) * DEG;
+  const eps = (23.439 - 4.0e-7*d) * DEG;           // obliquity
+  const soldist = 1.00014 - 0.01671*Math.cos(g) - 0.00014*Math.cos(2*g);
+  const ra  = Math.atan2(Math.cos(eps)*Math.sin(lam), Math.cos(lam));
+  const dec = Math.asin(Math.sin(eps)*Math.sin(lam));
+  // Greenwich mean sidereal time, hours
+  let gmst = 18.697374558 + 24.06570982441908*d;
+  gmst = ((gmst % 24) + 24) % 24;
+  const lmst = ((gmst + lonDeg/15) % 24 + 24) % 24;         // hours
+  const ha = lmst*15*DEG - ra;                              // hour angle, rad
+  const lat = latDeg*DEG;
+  let elev = Math.asin(Math.sin(lat)*Math.sin(dec) + Math.cos(lat)*Math.cos(dec)*Math.cos(ha)) / DEG;
+  let refr;                                                  // degrees
+  if(elev > 15)        refr = 0.00452*3.51561/Math.tan(elev*DEG);
+  else if(elev > -0.56) refr = 3.51561*(0.1594 + 0.0196*elev + 0.00002*elev*elev)
+                               /(1 + 0.505*elev + 0.0845*elev*elev);
+  else                 refr = 0.56;
+  elev += refr;
+  return { cza: Math.cos((90 - elev)*DEG), elev: elev, soldist: soldist };
+}
+
+/* --- normalise the measured global radiation against top-of-atmosphere and
+       split it into direct and diffuse, exactly as calc_solar_parameters() --- */
+function ljSolarParameters(solar, cza, soldist){
+  let fdir = 0, s = solar;
+  let toasolar = LJ.SOLAR_CONST * Math.max(0, cza) / (soldist*soldist);
+  if(cza < LJ.CZA_MIN) toasolar = 0;
+  if(toasolar > 0){
+    const normsolar = Math.min(s/toasolar, LJ.NORMSOLAR_MAX);
+    s = normsolar * toasolar;
+    if(normsolar > 0){
+      fdir = Math.exp(3 - 1.34*normsolar - 1.65/normsolar);
+      fdir = Math.max(Math.min(fdir, 0.9), 0.0);
+    }
+  }
+  return { solar: s, fdir: fdir };
+}
+
+/* --- outdoor WBGT. tC degC, rh %, pHpa hPa, wind m/s AT 2 m, solar W/m2 --- */
+function wbgtLiljegren(tC, rh, pHpa, wind2m, solarWm2, dateUTC, latDeg, lonDeg){
+  const sp = ljSolarPosition(dateUTC, latDeg, lonDeg);
+  const sc = ljSolarParameters(solarWm2, sp.cza, sp.soldist);
+  const tk = tC + 273.15, rhf = rh/100;
+  const cza = Math.max(sp.cza, LJ.CZA_MIN);   // guard the 1/(2*cza) term at night
+  const Tg   = ljTglobe(tk, rhf, pHpa, wind2m, sc.solar, sc.fdir, cza);
+  const Tnwb = ljTwb(tk, rhf, pHpa, wind2m, sc.solar, sc.fdir, cza, 1);
+  const Tpsy = ljTwb(tk, rhf, pHpa, wind2m, sc.solar, sc.fdir, cza, 0);
+  if(!isFinite(Tg) || !isFinite(Tnwb)) return null;
+  return {
+    wbgt: 0.1*tC + 0.2*Tg + 0.7*Tnwb,
+    tg: Tg, tnwb: Tnwb, tpsy: Tpsy,
+    solarUsed: sc.solar, fdir: sc.fdir, cza: sp.cza, elev: sp.elev
+  };
+}
+
+/* --- KNMI hittekracht, 0 to 10. KNMI TR-26-04 Table 1. --- */
+function hittekracht(wbgt){
+  if(!isFinite(wbgt)) return NaN;
+  if(wbgt < 14) return 0;
+  if(wbgt >= 32) return 10;
+  return Math.floor((wbgt - 14)/2) + 1;
+}
+
+
+/* --- 2.11 ACGIH heat-stress screening limits. WBGT in degC against work
+       allocation per hour. TLV applies to acclimatised workers, the Action
+       Limit to unacclimatised. Values as published in ACGIH, 2026 TLVs and
+       BEIs, p.242, reproduced by CCOHS. Blank cells in the published table
+       are omitted here rather than guessed. --- */
+const ACGIH_WBGT = {
+  acclimatised: {
+    light:      [['continuous',31.0],['50-75% work',31.0],['25-50% work',32.0],['0-25% work',32.5]],
+    moderate:   [['continuous',28.0],['50-75% work',29.0],['25-50% work',30.0],['0-25% work',31.5]],
+    heavy:      [                    ['50-75% work',27.5],['25-50% work',29.0],['0-25% work',30.5]],
+    veryheavy:  [                                         ['25-50% work',28.0],['0-25% work',30.0]]
+  },
+  unacclimatised: {
+    light:      [['continuous',28.0],['50-75% work',28.5],['25-50% work',29.5],['0-25% work',30.0]],
+    moderate:   [['continuous',25.0],['50-75% work',26.0],['25-50% work',27.0],['0-25% work',29.0]],
+    heavy:      [                    ['50-75% work',24.0],['25-50% work',25.5],['0-25% work',28.0]],
+    veryheavy:  [                                         ['25-50% work',24.5],['0-25% work',27.0]]
+  }
+};
+/* Least restrictive allocation whose limit is not exceeded, or null if the
+   WBGT is above every tabulated limit for that workload. */
+function acgihAllocation(wbgt, workload, acclimatised){
+  const rows = ACGIH_WBGT[acclimatised ? 'acclimatised' : 'unacclimatised'][workload];
+  if(!rows) return null;
+  for(const [label, limit] of rows) if(wbgt <= limit) return {label: label, limit: limit};
+  return null;
+}
+
 /* =====================================================================
    3. PRESSURE & ALTITUDE
    ===================================================================== */
@@ -1445,6 +1677,8 @@ const API = {
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
   absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
   humidex,apparentTempBOM,wbgtSimple,
+  LJ,ljSolarPosition,ljSolarParameters,wbgtLiljegren,hittekracht,
+  ACGIH_WBGT,acgihAllocation,
   utciPoly,utciEs,utci,scaleWind,mrtFromGlobe,wbgtISO,UTCI_BANDS,utciCategory,WBGT_BANDS,wbgtBand,utciRangeIssues,
   PRESS,pressTo,isa,geometricToGeopotential,geopotentialToGeometric,
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
@@ -1998,6 +2232,77 @@ card('moist', {
   },
   src:'<b>Bröde, P. et al. (2012)</b>, <i>Deriving the operational procedure for the Universal Thermal Climate Index (UTCI)</i>, Int J Biometeorol <b>56</b>, 481-494. A 6th-order regression polynomial with 210 coefficients over air temperature, wind at 10 m, T<sub>mrt</sub> − T<sub>a</sub> and vapour pressure, approximating the UTCI-Fiala multi-node model to about 1.1 K RMSE. Developed under COST Action 730 (2005-2009). Valid for −50 ≤ T<sub>a</sub> ≤ +50 °C, −30 ≤ T<sub>mrt</sub> − T<sub>a</sub> ≤ +70 K, 0.5 ≤ v ≤ 17 m/s, RH 5-100%. The saturation vapour pressure used here is UTCI’s own formula, not the app’s WMO/CIMO one, because the polynomial was fitted against it. ECMWF has produced pan-European UTCI operationally since 2016 and it is the index behind Copernicus ERA5-HEAT. This implementation was checked against the reference implementation at 33,420 points; largest difference 1.7×10⁻¹¹ °C.'
 });
+card('moist', {
+  title:'Hittekracht — KNMI heat index (0-10)',
+  span:true, cols:true,
+  fields:[
+    {id:'t',   label:'Air temperature °C', type:'num', val:28, step:0.1},
+    {id:'rh',  label:'Relative humidity %', type:'num', val:55, step:1},
+    {id:'w',   label:'Wind at 2 m m/s', type:'num', val:3, step:0.1},
+    {id:'s',   label:'Global radiation W/m²', type:'num', val:750, step:10},
+    {id:'p',   label:'Station pressure hPa', type:'num', val:1013.25, step:0.1},
+    {id:'lat', label:'Latitude °N', type:'num', val:52.10, step:0.01},
+    {id:'lon', label:'Longitude °E', type:'num', val:5.18, step:0.01},
+    {id:'mon', label:'Month', type:'sel', val:'6',
+      opts:[['1','January'],['2','February'],['3','March'],['4','April'],['5','May'],
+            ['6','June'],['7','July'],['8','August'],['9','September'],['10','October'],
+            ['11','November'],['12','December']]},
+    {id:'day', label:'Day of month', type:'num', val:21, step:1},
+    {id:'hr',  label:'Hour UTC', type:'num', val:12, step:0.5},
+    {id:'acc', label:'Worker acclimatisation', type:'sel', val:'1', wide:true,
+      opts:[['1','Acclimatised (ACGIH TLV)'],['0','Not acclimatised (ACGIH Action Limit)']]}
+  ],
+  rule:'Hittekracht is not a new physical quantity. It is the <b>outdoor Wet Bulb Globe Temperature</b> placed on a 0 to 10 scale, the way wind force and sun strength are. WBGT weights the natural wet bulb 70%, the black globe 20% and the air temperature 10%, so humidity dominates while radiation and wind both matter. That is why the date, the position and the radiation are needed: the globe and the wetted wick each sit in the sun.',
+  compute(v){
+    const d = new Date(Date.UTC(2026, (parseInt(v.mon,10)||1)-1, v.day||1,
+                                Math.floor(v.hr||0), Math.round(((v.hr||0)%1)*60)));
+    const r = M.wbgtLiljegren(v.t, v.rh, v.p, Math.max(v.w,0), v.s, d, v.lat, v.lon);
+    if(!r) return {rows: rowsOf([['hittekracht','—','','hero'],
+      ['the iteration did not converge','','','hero txt']]),
+      flag:'Liljegren&rsquo;s energy balance failed to converge for these inputs. Check that temperature, humidity and pressure are physically consistent.'};
+    const hk = M.hittekracht(r.wbgt);
+    const band = hk === 0 ? 'WBGT below 14 °C'
+               : hk === 10 ? 'WBGT 32 °C or above'
+               : 'WBGT ' + (12 + 2*hk) + '-' + (14 + 2*hk) + ' °C';
+    // KNMI publishes no word-label per level: TR-26-04 calls the scale a
+    // communication scale and leaves interpretation to the reader, and the
+    // KNMI explainer declines to give per-level advice because the response
+    // depends on age, health, activity and clothing. What KNMI does state is
+    // how often each level occurs, which is quoted here and nothing more.
+    const context = hk >= 10 ? 'KNMI: extremely rare in the Netherlands'
+                  : hk === 9 ? 'KNMI: rare, and possible from an air temperature as low as 25 °C'
+                  : hk === 8 ? 'KNMI: 8 or more is significant, about 2.3 days a year on average'
+                  : hk >= 6  ? 'KNMI: the level usually reached during Dutch heatwaves, 1991-2024'
+                  : 'KNMI publishes no description for this level';
+    const rows = [
+      ['hittekracht', String(hk), '', 'hero'],
+      [band, '', '', 'hero txt'],
+      [context, '', '', 'dim txt'],
+      ['outdoor WBGT', N(r.wbgt,2), '°C', 'hero'],
+      ['black globe T<sub>g</sub>', N(r.tg,1), '°C'],
+      ['natural wet bulb T<sub>nwb</sub>', N(r.tnwb,1), '°C'],
+      ['psychrometric wet bulb', N(r.tpsy,1), '°C', 'dim'],
+      ['solar elevation', N(r.elev,1), '°', 'dim'],
+      ['direct beam fraction', N(r.fdir,3), '', 'dim'],
+      ['radiation used', N(r.solarUsed,0), 'W/m²', 'dim'],
+      ['BOM approximation, no wind or sun', N(M.wbgtSimple(v.t, v.rh),2), '°C', 'dim']
+    ];
+    const acc = v.acc === '1';
+    for(const [key,name] of [['light','light work'],['moderate','moderate work'],
+                             ['heavy','heavy work'],['veryheavy','very heavy work']]){
+      const a = M.acgihAllocation(r.wbgt, key, acc);
+      rows.push([name, a ? a.label : 'above every tabulated limit', '', a ? '' : 'dim']);
+    }
+    const notes = [];
+    if(r.elev <= 0) notes.push('The sun is below the horizon at this time and place, so the radiation term is zero whatever you entered.');
+    else if(Math.abs(r.solarUsed - v.s) > 1) notes.push('Global radiation was adjusted from ' + N(v.s,0) +
+      ' to ' + N(r.solarUsed,0) + ' W/m&sup2;, because the model caps the measured value at 85% of the top-of-atmosphere irradiance for this sun angle.');
+    if(v.w < 0.13) notes.push('Wind was raised to the 0.13 m/s floor the model requires; the convection correlations are not defined in still air.');
+    return {rows: rowsOf(rows), flag: notes.length ? notes.join(' ') : null};
+  },
+  src:'<b>Liljegren, J.C., Carhart, R.A., Lawday, P., Tschopp, S. and Sharp, R. (2008)</b>, <i>Modeling the Wet Bulb Globe Temperature Using Standard Meteorological Measurements</i>, J Occup Environ Hyg <b>5</b>, 645-655. Implemented from Liljegren&rsquo;s own reference C code (UChicago Argonne, LLC, 2008), redistributed under the MIT licence at github.com/mdljts/wbgt: iterative energy balances on a 50.8 mm black globe and a 7 mm wetted wick, with the direct beam split off by f<sub>dir</sub> = exp(3 &minus; 1.34&middot;n &minus; 1.65/n) on the normalised irradiance. The 0-10 banding is <b>KNMI Technical Report TR-26-04</b>, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i> (2026), Table 1: band 0 below 14 °C, then 2 °C steps to band 10 at 32 °C and above. KNMI publishes <b>no qualitative label for any level</b>: TR-26-04 calls hittekracht a communication scale and leaves interpretation to end users and professionals, and the KNMI explainer declines to give per-level advice because the response depends on age, health, activity and clothing. The frequency statements shown are KNMI&rsquo;s own: 8 or more is significant and occurs on about 2.3 days a year on average, 9 is rare and possible from 25 °C, 10 is extremely rare, and Dutch heatwaves between 1991 and 2024 usually sat at 6-7. Wind must be the 2 m value: Liljegren&rsquo;s stability-based adjustment from other measurement heights is <b>not</b> implemented here, so convert first if your anemometer sits at 10 m. KNMI runs this same model through the Kong and Huber (2022) port, so small differences from the KNMI app are expected. <br><br><b>The work allocation rows are a different standard and a different purpose.</b> They are the <b>ACGIH</b> heat-stress screening criteria, <i>2026 TLVs and BEIs</i>, p.242, as reproduced by the Canadian Centre for Occupational Health and Safety: the Threshold Limit Value for acclimatised workers and the Action Limit for unacclimatised ones, assuming an 8-hour day in a 5-day week with conventional breaks. They screen <b>occupational exposure for working adults</b> and say nothing about the general public, which is what hittekracht addresses. Where the published table has no entry for a workload at a given allocation, no value is shown rather than one inferred. ISO 7243 covers the same ground with its own reference values, which are not reproduced here.'
+});
+
 
 card('moist', {
   title:'WBGT (ISO 7243) &amp; radiant temperature',
