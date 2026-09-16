@@ -204,6 +204,12 @@ input.off,select.off{opacity:.4; cursor:not-allowed}
   letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+input[type=time]{
+  font-family:'IBM Plex Mono',monospace; font-size:14px; padding:.42rem .5rem;
+  color:var(--ink); background:var(--panel-2); border:1px solid var(--line);
+  border-radius:var(--radius); width:100%;
+}
+input[type=time]:hover{border-color:var(--ink-3)}
 input[type=number],select{
   width:100%; font-family:'IBM Plex Mono',monospace; font-size:14px;
   padding:.42rem .5rem; color:var(--ink); background:var(--panel-2);
@@ -1993,6 +1999,11 @@ function card(mod, spec){
       if(f.type==='sel'){
         html += '<select id="'+id+'">'+f.opts.map(o=>
           '<option value="'+esc(o[0])+'"'+(o[0]===f.val?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
+      } else if(f.type==='time'){
+        /* A decimal hour reads as a clock time and is not one: 19.36 h is 19:21:36, and it was
+           misread as 19:36 by the person who wrote the card. The field is a clock; the engine
+           still gets a decimal hour, converted in read(). */
+        html += '<input type="time" id="'+id+'" step="60"'+(f.val?' value="'+esc(f.val)+'"':'')+'>';
       } else if(f.type==='txt'){
         html += '<input type="text" id="'+id+'"'+(f.val?' value="'+esc(f.val)+'"':'')
              + (f.ph ? ' placeholder="'+esc(f.ph)+'"' : '')+'>';
@@ -2024,7 +2035,11 @@ function card(mod, spec){
     const v = {};
     for(const f of (spec.fields||[])){
       const e = document.getElementById(ids[f.id]);
-      v[f.id] = (f.type==='sel'||f.type==='txt'||f.type==='area') ? e.value : parseFloat(e.value);
+      if(f.type==='time'){
+        const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(e.value || '');
+        v[f.id] = m ? (+m[1] + m[2]/60 + (m[3]?m[3]/3600:0)) : NaN;
+      }
+      else v[f.id] = (f.type==='sel'||f.type==='txt'||f.type==='area') ? e.value : parseFloat(e.value);
     }
     return v;
   }
@@ -2564,22 +2579,28 @@ card('moist', {
             ['6','June'],['7','July'],['8','August'],['9','September'],['10','October'],
             ['11','November'],['12','December']]},
     {id:'day', label:'Day of month', type:'num', val:21, step:1},
-    {id:'hr',  label:'Hour UTC', type:'num', val:12, step:0.5},
+    {id:'hr',  label:'Local time (hh:mm)', type:'time', val:'12:00'},
+    {id:'tz',  label:'Hours from UTC', type:'num', val:2, step:0.25},
     {id:'acc', label:'Worker acclimatisation', type:'sel', val:'1', wide:true,
       opts:[['1','Acclimatised (ACGIH TLV)'],['0','Not acclimatised (ACGIH Action Limit)']]}
   ],
-  rule:'Hittekracht is not a new physical quantity. It is the <b>outdoor Wet Bulb Globe Temperature</b> placed on a 0 to 10 scale, the way wind force and sun strength are. WBGT weights the natural wet bulb 70%, the black globe 20% and the air temperature 10%, so humidity dominates while radiation and wind both matter. That is why the date, the position and the radiation are needed: the globe and the wetted wick each sit in the sun.',
+  rule:'Hittekracht is not a new physical quantity. It is the <b>outdoor Wet Bulb Globe Temperature</b> placed on a 0 to 10 scale, the way wind force and sun strength are. WBGT weights the natural wet bulb 70%, the black globe 20% and the air temperature 10%, so humidity dominates while radiation and wind both matter. That is why the date, the position and the radiation are needed: the globe and the wetted wick each sit in the sun. <b>The time is your local clock</b>, and the offset box is how it becomes the instant the sun calculation needs.',
   compute(v){
     const clear0 = v.smode === 'clear';
     const blank = [['t','air temperature'],['rh','relative humidity'],['w','wind'],['p','pressure'],
-                   ['lat','latitude'],['lon','longitude'],['day','day of month'],['hr','hour']]
+                   ['lat','latitude'],['lon','longitude'],['day','day of month'],['hr','local time'],['tz','hours from UTC']]
                     .concat(clear0 ? [] : [['s','global radiation']])
                     .filter(f => !isFinite(v[f[0]])).map(f => f[1]);
     if(blank.length) return {rows: rowsOf([['hittekracht','—','','hero'],['outdoor WBGT','—','°C','hero']]),
       flag:'Nothing is computed until every box is filled. Empty: <b>'+blank.join(', ')+'</b>.',
       labels:{s: clear0 ? 'not needed in clear-sky mode' : 'Global radiation W/m²'}, disable:{s: clear0}};
-    const d = new Date(Date.UTC(2026, (parseInt(v.mon,10)||1)-1, v.day,
-                                Math.floor(v.hr), Math.round((v.hr%1)*60)));
+    /* The date and time boxes are the LOCAL civil clock, the one the user reads, and the offset
+       box turns them into the instant the solar position needs. Asking for a UTC hour was
+       correct and unusable: 19.36 was read as 19:36 by the person who wrote the card. */
+    if(Math.abs(v.tz) > 14) return {rows: rowsOf([['hittekracht','—','','hero']]),
+      flag:'No time zone is further from UTC than &plusmn;14 hours.',
+      labels:{s: clear0 ? 'not needed in clear-sky mode' : 'Global radiation W/m²'}, disable:{s: clear0}};
+    const d = new Date(Date.UTC(2026, (parseInt(v.mon,10)||1)-1, v.day) + (v.hr - v.tz)*3600e3);
     // Clear-sky mode invents nothing. It hands the model the top-of-atmosphere
     // irradiance for this sun angle and lets Liljegren's own NORMSOLAR_MAX cap
     // of 0.85 decide the surface value, exactly as it would for a measurement
@@ -3508,9 +3529,10 @@ function moduleLocate(mod, label){
                  + label + '</button><p class="locnote" id="mln-'+mod+'"></p></div>';
   const btn  = document.getElementById('ml-'+mod);
   const note = document.getElementById('mln-'+mod);
-  const setAll = (suffix, val) => {
+  const setAll = (suffix, val, timeVal) => {
     const hit = document.querySelectorAll('#g-'+mod+' [id$="_'+suffix+'"]');
-    hit.forEach(e=>{ e.value = val; e.dispatchEvent(new Event('input', {bubbles:true})); });
+    hit.forEach(e=>{ e.value = (e.type === 'time' && timeVal != null) ? timeVal : val;
+                     e.dispatchEvent(new Event('input', {bubbles:true})); });
     return hit.length;
   };
   btn.addEventListener('click', ()=>{
@@ -3521,18 +3543,21 @@ function moduleLocate(mod, label){
        moved 18:20 UTC to 18:30, which is 2.5 degrees of hour angle invented out of nothing, and
        at 23:45 it produced an hour of 24. The step only drives the spinner arrows; the card
        reads the value with parseFloat and is happy with 18.33. */
-    const utcH = now.getUTCHours() + now.getUTCMinutes()/60 + now.getUTCSeconds()/3600;
-    const n = setAll('mon', String(now.getUTCMonth()+1))
-            + setAll('day', now.getUTCDate())
-            + setAll('hr',  Math.round(utcH*100)/100);
+    const hhmm = d => String(d).padStart(2,'0');
+    const y = now.getFullYear(), mo = now.getMonth(), dy = now.getDate();
+    /* Local civil date and time, with the offset that applies to that date, exactly as the Sun
+       card does it. Read at local noon so a daylight-saving zone gets the right hour. */
+    const tz = -new Date(y, mo, dy, 12).getTimezoneOffset()/60;
+    const n = setAll('mon', String(mo+1))
+            + setAll('day', dy)
+            + setAll('tz',  tz)
+            + setAll('hr',  now.getHours() + now.getMinutes()/60,
+                     hhmm(now.getHours())+':'+hhmm(now.getMinutes()));
     /* Say what the conversion was. A box labelled "Hour UTC" showing 18.5 to someone whose own
        clock reads 20:30 is correct and reads as wrong until the arithmetic is spelled out. */
-    const hhmm = d => String(d).padStart(2,'0');
-    const offH = -now.getTimezoneOffset()/60;
-    const clock = 'Your clock reads <b>' + hhmm(now.getHours()) + ':' + hhmm(now.getMinutes())
-                + '</b> local, which is UTC' + (offH < 0 ? '' : '+') + (Math.round(offH*100)/100)
-                + '. These cards take a <b>UTC</b> hour, so the box is set to <b>'
-                + hhmm(now.getUTCHours()) + ':' + hhmm(now.getUTCMinutes()) + ' UTC</b>, and the date with it. ';
+    const clock = 'Date and time set to <b>' + hhmm(now.getHours()) + ':' + hhmm(now.getMinutes())
+                + '</b> on your own clock, with the offset UTC' + (tz < 0 ? '' : '+') + (Math.round(tz*100)/100)
+                + ' that applies to today where you are. ';
     const fail = why => { note.innerHTML = clock + why; };
     note.innerHTML = 'Asking your device for a location. Answer the permission prompt if your browser shows one.';
     if(!navigator.geolocation)
