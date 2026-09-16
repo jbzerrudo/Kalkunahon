@@ -396,9 +396,19 @@ function windChillC(t, vKmh){
 }
 
 /* --- 2.7 Humidex (ECCC; Masterton & Richardson 1979) --- */
+/* Masterton & Richardson (1979), CLI 1-79, read from the report itself. Two details that
+   most implementations get wrong, this one included until now.
+   The report defines 273.16 as "melting point of ice (degK)", which is its own 0 degC, so the
+   constant belongs in BOTH places. Putting 273.16 in the first term while converting the dew
+   point with 273.15, which is what is usually recommended, is further from the published
+   formula than leaving both at 273.15: 0.044 against 0.008 over 20-50 degC.
+   And h is 5/9 (e - 10), not 0.5555 (e - 10).
+   The 5417.7530 coefficient is MwL/R* from the report's own figures: 18.016 g/mol times
+   597.3 cal/g times 4.186e7 erg/cal over 8.3144e7 erg/mol/K, which comes to 5417.7530 exactly. */
+const HUMIDEX_ICE = 273.16;
 function humidex(t, td){
-  const e = 6.11*Math.exp(5417.7530*(1/273.15 - 1/(td+273.15)));
-  return t + 0.5555*(e-10.0);
+  const e = 6.11*Math.exp(5417.7530*(1/HUMIDEX_ICE - 1/(td+HUMIDEX_ICE)));
+  return t + (5/9)*(e-10.0);
 }
 
 /* --- 2.8 Apparent temperature, BOM shade version (Steadman) --- */

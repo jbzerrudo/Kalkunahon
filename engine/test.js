@@ -421,6 +421,31 @@ ok('ISO 7243 differs from the BOM approximation',
    ===================================================================== */
 console.log('\n== REGRESSIONS ==');
 
+/* Humidex, from Masterton & Richardson (1979), CLI 1-79, read from the report.
+   Table 1 converts dew point to h, rounded to whole numbers, and the text gives one worked
+   example. The report defines 273.16 as the melting point of ice, so it is its own 0 C and
+   belongs in both places; and h is 5/9 (e - 10), not 0.5555 (e - 10). */
+{
+  const T1 = {10:1,11:2,12:2,13:3,14:3,15:4,16:5,17:5,18:6,19:7,
+              20:8,21:8,22:9,23:10,24:11,25:12,26:13,27:15};
+  let bad = [];
+  for(const td in T1){
+    const h = Math.round(M.humidex(0, +td));
+    if(h !== T1[td]) bad.push('Td='+td+' gives '+h+', Table 1 says '+T1[td]);
+  }
+  eq('all 18 entries of Table 1 reproduced', bad.join('; ') || 'none', 'none');
+  ok('worked example T=31 Td=16 gives humidex 36', Math.round(M.humidex(31,16)), 36, 0);
+  /* The coefficient is MwL/R* from the report's own figures, not a number taken on trust. */
+  ok('5417.7530 is MwL/R* from the report', 18.016*597.3*4.186e7/8.3144e7, 5417.7530, 1e-3);
+  /* Putting 273.16 in the first term only, which is the usual recommendation, is further from
+     the published formula than leaving both at 273.15. Guard against anyone "fixing" it back. */
+  {
+    const K = 5417.7530, mixed = (t,td)=>t+0.5555*(6.11*Math.exp(K*(1/273.16-1/(td+273.15)))-10);
+    ok('the mixed 273.16/273.15 form departs by more than 0.04 at 50 C',
+       Math.abs(mixed(49.9,49.8) - M.humidex(49.9,49.8)), 0.0442, 5e-3);
+  }
+}
+
 /* ACGIH 2026 TLVs and BEIs, Table 3 on p.242, read from the booklet itself: every value and
    every deliberately empty cell. Rows are the allocation of work within the hour, so the top
    row is 75-100%, not continuous work. */

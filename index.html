@@ -878,9 +878,19 @@ function windChillC(t, vKmh){
 }
 
 /* --- 2.7 Humidex (ECCC; Masterton & Richardson 1979) --- */
+/* Masterton & Richardson (1979), CLI 1-79, read from the report itself. Two details that
+   most implementations get wrong, this one included until now.
+   The report defines 273.16 as "melting point of ice (degK)", which is its own 0 degC, so the
+   constant belongs in BOTH places. Putting 273.16 in the first term while converting the dew
+   point with 273.15, which is what is usually recommended, is further from the published
+   formula than leaving both at 273.15: 0.044 against 0.008 over 20-50 degC.
+   And h is 5/9 (e - 10), not 0.5555 (e - 10).
+   The 5417.7530 coefficient is MwL/R* from the report's own figures: 18.016 g/mol times
+   597.3 cal/g times 4.186e7 erg/cal over 8.3144e7 erg/mol/K, which comes to 5417.7530 exactly. */
+const HUMIDEX_ICE = 273.16;
 function humidex(t, td){
-  const e = 6.11*Math.exp(5417.7530*(1/273.15 - 1/(td+273.15)));
-  return t + 0.5555*(e-10.0);
+  const e = 6.11*Math.exp(5417.7530*(1/HUMIDEX_ICE - 1/(td+HUMIDEX_ICE)));
+  return t + (5/9)*(e-10.0);
 }
 
 /* --- 2.8 Apparent temperature, BOM shade version (Steadman) --- */
@@ -2445,7 +2455,7 @@ card('moist', {
       flag = 'Wind chill is defined only at or below 10 °C with wind above about 5 km/h, so it is not reported here. The other indices are for warm conditions and are the relevant ones.';
     return {rows: rowsOf(rows), flag: flag};
   },
-  src:'<b>Heat index:</b> full four-step NWS procedure — simple Steadman form first, Rothfusz regression above 80 °F, then the low-humidity (RH&lt;13%, 80-112 °F) or high-humidity (RH&gt;85%, 80-87 °F) adjustment. Stated error ±1.3 °F against Steadman’s table. <b>Wind chill:</b> 2001 NWS / ECCC index, metric form, valid T ≤ 10 °C and V &gt; 5 km/h. <b>Humidex:</b> ECCC official equation (Masterton &amp; Richardson 1979). <b>Apparent temperature:</b> Steadman/BOM shade version, AT = T<sub>a</sub> + 0.33e − 0.70ws − 4.00. <b>WBGT:</b> the BOM simplified approximation, <b>not</b> ISO 7243. It assumes moderately high radiation and light wind and takes no radiation or wind input at all, so it cannot respond to sun or shade. For the real thing see the ISO 7243 card below, which needs globe and natural-wet-bulb readings.'
+  src:'<b>Heat index:</b> full four-step NWS procedure — simple Steadman form first, Rothfusz regression above 80 °F, then the low-humidity (RH&lt;13%, 80-112 °F) or high-humidity (RH&gt;85%, 80-87 °F) adjustment. Stated error ±1.3 °F against Steadman’s table. <b>Wind chill:</b> 2001 NWS / ECCC index, metric form, valid T ≤ 10 °C and V &gt; 5 km/h. <b>Humidex:</b> ECCC official equation, implemented from the report itself: Masterton, J.M. and Richardson, F.A. (1979), <i>Humidex: A method of quantifying human discomfort due to excessive heat and humidity</i>, Environment Canada, CLI 1-79, Downsview. H = T + 5/9(e &minus; 10) with e = 6.11&middot;exp[5417.7530(1/273.16 &minus; 1/T<sub>d</sub>)] in millibars. Two details most implementations miss. The report defines <b>273.16 as the melting point of ice</b>, which is its own 0 &deg;C, so the constant belongs in <b>both</b> places; putting 273.16 in the first term while converting the dew point with 273.15, which is the usual advice, lands <i>further</i> from the published formula than using 273.15 throughout, by 0.044 against 0.008 over 20 to 50 &deg;C. And the multiplier is <b>5/9</b>, not the truncated 0.5555. The 5417.7530 coefficient is M<sub>w</sub>L/R* from the report&rsquo;s own figures (18.016 g/mol, 597.3 cal/g, 4.186&times;10<sup>7</sup> erg/cal, 8.3144&times;10<sup>7</sup> erg/mol/K), which comes to 5417.7530 exactly. All 18 entries of the report&rsquo;s Table 1 are reproduced. <b>Apparent temperature:</b> Steadman/BOM shade version, AT = T<sub>a</sub> + 0.33e − 0.70ws − 4.00. <b>WBGT:</b> the BOM simplified approximation, <b>not</b> ISO 7243. It assumes moderately high radiation and light wind and takes no radiation or wind input at all, so it cannot respond to sun or shade. For the real thing see the ISO 7243 card below, which needs globe and natural-wet-bulb readings.'
 });
 
 card('moist', {
@@ -2702,7 +2712,7 @@ card('moist', {
     else flag = '<b>That risk level is an exercise scale, not a universal one.</b> It comes from Japan’s Ministry of the Environment, after the Japan Sports Association, and assumes physical activity. ISO 7243’s own occupational limits are not a single scale at all: they vary with metabolic rate, acclimatisation and clothing, so the same WBGT is acceptable for light seated work and unacceptable for heavy labour. ISO 7243 is a <b>screening</b> method for exposure over a working day of up to 8 hours, for healthy adults, and does not apply to brief exposures.';
     return {rows: rowsOf(rows), flag: flag};
   },
-  src:'<b>ISO 7243:2017</b>, <i>Ergonomics of the thermal environment — Assessment of heat stress using the WBGT index</i>. Weights confirmed numerically against a reference implementation. Mean radiant temperature from the globe by the <b>ISO 7726</b> forced-convection relation <b>only</b> (the standard also gives a natural-convection relation, to be used where it yields the larger coefficient; it is not implemented here, so T<sub>mrt</sub> is a lower bound in still air and the card says so), T<sub>mrt</sub> = [T<sub>g</sub>⁴ + (1.1×10⁸·v<sup>0.6</sup>)/(ε·D<sup>0.4</sup>)·(T<sub>g</sub> − T<sub>a</sub>)]<sup>1/4</sup>, with ε = 0.95 and the wind scaled from 10 m down to globe height by the log law, as ECMWF’s thermofeel does it. The UTCI row is a convenience: a globe reading is exactly what UTCI’s missing fourth input needs. WBGT has been Japan’s national heat-illness index since 2006 and NWS recommends it over the heat index for vigorous activity in full sun.'
+  src:'<b>ISO 7243:2017</b>, <i>Ergonomics of the thermal environment — Assessment of heat stress using the WBGT index</i>. Weights confirmed numerically against a reference implementation. Mean radiant temperature from the globe by the <b>ISO 7726:1998</b> forced-convection relation <b>only</b> (the standard also gives a natural-convection relation, to be used where it yields the larger coefficient; it is not implemented here, so T<sub>mrt</sub> is a lower bound in still air and the card says so), T<sub>mrt</sub> = [T<sub>g</sub>⁴ + (1.1×10⁸·v<sup>0.6</sup>)/(ε·D<sup>0.4</sup>)·(T<sub>g</sub> − T<sub>a</sub>)]<sup>1/4</sup>, with ε = 0.95 and the wind scaled from 10 m down to globe height by the log law, as ECMWF’s thermofeel does it. The UTCI row is a convenience: a globe reading is exactly what UTCI’s missing fourth input needs. <b>Which edition, and which one this is not.</b> The relation above is the one in <b>ISO 7726:1998</b>, taken from the implementations that cite it rather than from the standard itself, which is sold and has not been read here. <b>ISO 7726:1998 was withdrawn on 17 October 2025 and replaced by ISO 7726:2025</b>, whose Annex B carries the same title, <i>Measurement and calculation of the mean radiant temperature</i>. Nothing here has been checked against the 2025 edition: neither the missing natural-convection branch nor the 1.1&times;10<sup>8</sup> constant in the forced relation that this card does use. Until it has been, read this T<sub>mrt</sub> as a 1998-vintage figure. WBGT has been Japan’s national heat-illness index since 2006 and NWS recommends it over the heat index for vigorous activity in full sun.'
 });
 
 card('moist', {
@@ -3461,12 +3471,13 @@ card('ref', {
      ['NWS station-pressure ↔ altimeter-setting pair','Not exact inverses: the 0.3 hPa term is dropped in one direction, about 8 ft.'],
      ['Bolton eq. numbering for the dewpoint LCL form','Sources label it eq. 15 or eq. 21. The formulas themselves are verified; only the label is uncertain.'],
      ['QNE','Not a genuine ICAO Q-code, and two incompatible usages circulate: the 1013.25 hPa <i>setting</i>, and the <i>indicated altitude</i> with that setting on the ground.'],
+     ['ISO 7726, which edition and which constants','The globe-to-T<sub>mrt</sub> relation here is the ISO 7726:1998 one, taken from implementations that cite it, not from the standard. That edition was <b>withdrawn on 17 October 2025</b> and replaced by ISO 7726:2025. Neither the 1.1&times;10<sup>8</sup> forced-convection constant in use nor the natural-convection branch that is missing has been checked against the current edition.'],
      ['ISO 2533 and US Std Atm 1976 primary PDFs','Not read directly (host restrictions). Constants confirmed via three independent sources that agree exactly.'],
      ['ISO 7726 and ISO 7243 primary text','Paywalled; the free sample stops at the scope. The WBGT weights, the globe-to-T<sub>mrt</sub> formula and its 0.15 m / 0.95 constants were confirmed against ECMWF’s thermofeel and a second reference implementation, which agree exactly, but not against the standards themselves.'],
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
-  src:'The calculation engine ships with 292 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+  src:'The calculation engine ships with 296 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
 
 /* =================================================================
