@@ -3517,10 +3517,22 @@ function moduleLocate(mod, label){
     /* The cards in this module work in UTC, so the clock is read in UTC. No permission and no
        network is needed for it, so it is set first and survives a refused or failed fix. */
     const now = new Date();
+    /* The exact fractional hour, not snapped to the field's step. Snapping to the half hour
+       moved 18:20 UTC to 18:30, which is 2.5 degrees of hour angle invented out of nothing, and
+       at 23:45 it produced an hour of 24. The step only drives the spinner arrows; the card
+       reads the value with parseFloat and is happy with 18.33. */
+    const utcH = now.getUTCHours() + now.getUTCMinutes()/60 + now.getUTCSeconds()/3600;
     const n = setAll('mon', String(now.getUTCMonth()+1))
             + setAll('day', now.getUTCDate())
-            + setAll('hr',  Math.round((now.getUTCHours() + now.getUTCMinutes()/60)*2)/2);
-    const clock = 'Date and hour set from your device clock, in UTC, which is what these cards want. ';
+            + setAll('hr',  Math.round(utcH*100)/100);
+    /* Say what the conversion was. A box labelled "Hour UTC" showing 18.5 to someone whose own
+       clock reads 20:30 is correct and reads as wrong until the arithmetic is spelled out. */
+    const hhmm = d => String(d).padStart(2,'0');
+    const offH = -now.getTimezoneOffset()/60;
+    const clock = 'Your clock reads <b>' + hhmm(now.getHours()) + ':' + hhmm(now.getMinutes())
+                + '</b> local, which is UTC' + (offH < 0 ? '' : '+') + (Math.round(offH*100)/100)
+                + '. These cards take a <b>UTC</b> hour, so the box is set to <b>'
+                + hhmm(now.getUTCHours()) + ':' + hhmm(now.getUTCMinutes()) + ' UTC</b>, and the date with it. ';
     const fail = why => { note.innerHTML = clock + why; };
     note.innerHTML = 'Asking your device for a location. Answer the permission prompt if your browser shows one.';
     if(!navigator.geolocation)
