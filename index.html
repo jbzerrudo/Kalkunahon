@@ -102,6 +102,19 @@ body{
 }
 .tbtn:hover{border-color:var(--accent); color:var(--accent)}
 
+.locate{margin:0 0 .85rem}
+.locbtn{
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.09em;
+  text-transform:uppercase; padding:.36rem .7rem; cursor:pointer;
+  border:1px solid var(--accent); border-radius:var(--radius);
+  background:var(--accent-soft); color:var(--accent);
+}
+.locbtn:hover{background:var(--accent); color:var(--accent-ink)}
+.locbtn[disabled]{opacity:.45; cursor:progress}
+.locnote{margin:.55rem 0 0; font-size:11.5px; line-height:1.45; color:var(--ink-2)}
+.locnote:empty{display:none}
+.locnote b{color:var(--ink)}
+
 .app{display:grid; grid-template-columns:214px minmax(0,1fr); align-items:start; min-width:0}
 .rail{
   min-width:0; position:sticky; top:53px; align-self:start; padding:1.1rem .8rem;
@@ -1834,6 +1847,8 @@ function card(mod, spec){
   const ids = {};
 
   let html = '<h3 class="card-t"><span>'+spec.title+'</span></h3>';
+  if(spec.locate) html += '<div class="locate"><button type="button" class="locbtn" id="'+ns+'loc">'
+    + spec.locate.label + '</button><p class="locnote" id="'+ns+'note"></p></div>';
   if(spec.fields && spec.fields.length){
     html += '<div class="fields'+(spec.fields.length===1?' one':'')+'">';
     for(const f of spec.fields){
@@ -1896,6 +1911,24 @@ function card(mod, spec){
     const e = document.getElementById(ids[f.id]);
     e.addEventListener('input', run);
     e.addEventListener('change', run);
+  }
+  /* Optional "fill these fields from the device" button. It only writes values into the
+     same inputs, which stay editable, so anything typed afterwards wins. */
+  if(spec.locate){
+    const lbtn  = document.getElementById(ns+'loc');
+    const lnote = document.getElementById(ns+'note');
+    const api = {
+      set:(k,val)=>{ const e = document.getElementById(ids[k]); if(e) e.value = val; },
+      say:m=>{ lnote.innerHTML = m; },
+      run:run
+    };
+    /* The button is never disabled while the request is out. A permission prompt the user
+       never answers settles neither callback, because the geolocation timeout does not start
+       until permission does, and a button disabled on click would stay disabled for good. */
+    lbtn.addEventListener('click', ()=>{
+      api.say('Asking your device for a location. Answer the permission prompt if your browser shows one.');
+      spec.locate.fill(api);
+    });
   }
   run();
 }
@@ -2913,6 +2946,41 @@ card('sun', {
     {id:'day', label:'Day of month', type:'num', val:4, step:1},
     {id:'tz',  label:'Hours from UTC', type:'num', val:8, step:0.25}
   ],
+  locate:{
+    label:'Use phone GPS and today\'s date',
+    /* Date and UTC offset come off the device clock. They need no permission and no network,
+       so they are set first and survive a refused or failed location fix. */
+    fill(api){
+      const now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+      api.set('yr', y); api.set('mon', String(m+1)); api.set('day', d);
+      /* Offset read at local noon on the chosen date, not at this instant: read off "now"
+         instead, a device in a daylight-saving zone is an hour out for half the year. */
+      api.set('tz', -new Date(y, m, d, 12).getTimezoneOffset()/60);
+      api.run();                       /* the date is in, so answer on it while the fix is pending */
+      const clock = 'Date and UTC offset set from your device clock. ';
+      const fail = why => { api.say(clock + why); api.run(); };
+      if(!navigator.geolocation)
+        return fail('This browser cannot read your location, so type the coordinates in yourself.');
+      navigator.geolocation.getCurrentPosition(
+        p => {
+          api.set('lat', p.coords.latitude.toFixed(2));
+          api.set('lon', p.coords.longitude.toFixed(2));
+          const a = p.coords.accuracy;
+          const acc = (typeof a === 'number' && isFinite(a)) ? Math.round(a) : null;
+          api.say(clock + 'Coordinates set from your device'
+            + (acc != null ? ', fix good to about \u00b1' + acc + ' m' : '')
+            + '. They are read to a hundredth of a degree, about 1 km, which moves sunrise and '
+            + 'sunset by only a few seconds. Overwrite them if you have a surveyed station '
+            + 'position, or if you want a different place.');
+          api.run();
+        },
+        e => fail(e && e.code === 1
+          ? 'Your device refused to share its location, so the coordinates below are unchanged. Type your own in.'
+          : 'The location could not be read, so type the coordinates in yourself.'),
+        {enableHighAccuracy:true, timeout:8000}
+      );
+    }
+  },
   rule:'These are not forecasts. Rise and set are computed from the sun\'s position and depend on no weather prediction at all. The only real uncertainty is refraction near the horizon, which varies with the actual temperature profile and can move the times by a minute or so on an unusual day. <b>Day length is the figure agrometeorology usually wants</b>, since photoperiod drives crop phenology.',
   compute(v){
     const d = new Date(Date.UTC(v.yr||2026, (parseInt(v.mon,10)||1)-1, v.day||1));
