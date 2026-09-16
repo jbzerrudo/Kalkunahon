@@ -2138,7 +2138,7 @@ card('wind', {
     return {
       html:'<div class="scroll"><table><thead><tr><th>Scale</th><th class="num">kt</th><th class="num">km/h</th><th class="num">m/s</th><th>Classification</th><th>Conversion</th></tr></thead><tbody>'+body+'</tbody></table></div>',
       flag: unverified
-        ? 'Two rows carry the chip <b>no WMO factor</b>. WMO/TD-1555 Table 1.2 converts between 1-minute and 10-minute winds only, and publishes nothing for CMA&rsquo;s 2-minute or IMD&rsquo;s 3-minute period, so those winds are shown <b>unconverted and are not comparable</b> with the rest of the table. IMD&rsquo;s averaging period could not be confirmed from an IMD-published source.'
+        ? 'Two rows carry the chip <b>no WMO factor</b>. WMO/TD-1555 Table 1.2 converts between 1-minute and 10-minute winds only, and publishes nothing for CMA&rsquo;s 2-minute or IMD&rsquo;s 3-minute period, so those winds are shown <b>unconverted and are not comparable</b> with the rest of the table. Both periods are stated in IBTrACS v04r01 Technical Details, Table 3; what is missing is a WMO factor to convert them, not the period itself.'
         : 'Each scale is evaluated at its own native averaging period, with WMO Table 1.2 applied where the input period differs, and each is compared against the ladder its own agency publishes in the unit you have selected. PAGASA uses a 10-minute averaging period following WMO guidance, confirmed from inside the agency, though it is not stated on PAGASA&rsquo;s public pages.'
     };
   },
@@ -3323,7 +3323,7 @@ card('ref', {
     [['NHC / CPHC','N Atlantic, E &amp; C Pacific','<b>1-minute</b> at 10 m','NHC Glossary'],
      ['JTWC','W Pacific, Indian Ocean, S Hemisphere','<b>1-minute</b> at 10 m','JTWC best-track documentation'],
      ['JMA / RSMC Tokyo','NW Pacific','<b>10-minute</b>','JMA RSMC advisory notes'],
-     ['BOM','Australian region','<b>10-minute</b> mean + 3-s gust','WMO IWTC-VII, not BOM directly'],
+     ['BOM','Australian region','<b>10-minute</b> mean + 3-s gust','IBTrACS v04r01 Technical Details, Table 3. BOM&rsquo;s own category page states no averaging period.'],
      ['RSMC La Réunion','SW Indian Ocean','<b>10-minute</b>','WMO IWTC-VII'],
      ['PAGASA','PAR','<b>10-minute</b>','PAGASA operational practice, following WMO guidance for the region. Warning-signal wind thresholds at pagasa.dost.gov.ph/learnings/legend'],
      ['HKO','NW Pacific','<b>10-minute</b>','IBTrACS v04r01 Technical Details, Table 3'],
@@ -3447,7 +3447,7 @@ card('ref', {
     tbl([['Item'],['Status']],
     [['The 0.88 gust factor attributed to “Atkinson (1974)”','WMO/TD-1555 never cites a 1974 Atkinson paper — only Atkinson &amp; Holliday (1977) — and calls 0.88 merely “traditional”. This tool labels it <b>legacy</b>, with no year.'],
      ['A numerical ± band on WMO Tables 1.1 and 1.2','None is published. WMO gives only qualitative statements about scatter, plus one case study (TC Orson, 1989) with s.d. 0.067-0.097 on factors of 1.1-1.24.'],
-     ['IMD 3-minute and CMA 2-minute periods','Widely repeated, not confirmed from IMD- or CMA-published material.'],
+     ['IMD and CMA averaging periods, from the agencies themselves','Stated as 3-minute and 2-minute in IBTrACS v04r01 Technical Details, Table 3, which is NOAA/NCEI documentation for the archive the field runs on and is treated here as confirmation. Neither has been read in an IMD- or CMA-published document.'],
      ['Knaff &amp; Zehr eq. 8 (wind from pressure)','The printed sign on the 0.518&Delta;P term does not round-trip against their eq. 7. This tool inverts eq. 7 numerically instead, sidestepping the ambiguity.'],
      ['WMO eq. 3.1 constant K<sub>p</sub> = 0.0148275','Does not equal g<sub>n</sub>/(R·ln10) = 0.0148370 as the identity of eqs. 3.1 and 3.2 requires — a 0.064% discrepancy. The exponential eq. 3.2 is used here.'],
      ['NWS station-pressure ↔ altimeter-setting pair','Not exact inverses: the 0.3 hPa term is dropped in one direction, about 8 ft.'],
