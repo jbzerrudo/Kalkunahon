@@ -82,6 +82,40 @@ The **Reference** module lists, in the app itself, every item that could *not* b
 against a primary source, including WMO's own published constant Kp, which is inconsistent with
 its two equations, and Knaff & Zehr's equation 8, whose printed sign does not round-trip.
 
+## Known limits
+
+These are the things the calculator does not do well, or does not know. The app carries the
+full list in its Reference module, under *What is not verified*; these are the ones that can
+move an answer.
+
+**Mean radiant temperature is a lower bound in still air.** ISO 7726 gives two relations for
+Tmrt from a globe thermometer, one for forced and one for natural convection, and directs you
+to whichever yields the larger convection coefficient. Only the forced relation is implemented
+here. Its correction term carries a factor of v^0.6, so as wind falls the term vanishes and
+Tmrt collapses onto the globe reading: at zero wind the card returns Tmrt = Tg exactly, which
+cannot be right when the globe is hotter than the air. Still air is also when radiant load
+matters most. The card flags this. The relation in use is the one from **ISO 7726:1998**, taken
+from the implementations that cite it rather than from the standard, which is sold and has not
+been read. That edition was **withdrawn on 17 October 2025** and replaced by ISO 7726:2025.
+Two things are therefore unchecked against the current edition: the missing natural-convection
+branch, and the 1.1e8 constant in the forced relation that is used every time.
+
+**The ACGIH work-rest limits are indexed on effective WBGT, not measured WBGT.** ACGIH Table 3
+expects the measured value plus a Clothing Adjustment Value. The app supplies the measured
+outdoor WBGT, which is the right input only for ordinary work clothes, whose adjustment is
+zero. For coveralls or vapour-barrier clothing the adjustment must be added first, up to
++11 C. The card lists the values.
+
+**Liljegren wind must be the 2 m value.** Liljegren's stability-based adjustment from other
+measurement heights is not implemented, so convert first if your anemometer sits at 10 m.
+
+**WMO Tables 1.1 and 1.2 carry no published uncertainty band.** WMO gives only qualitative
+statements about scatter plus one case study.
+
+**CMA's 2-minute and IMD's 3-minute winds are not convertible.** WMO Table 1.2 covers
+1-minute and 10-minute only, so those rows are shown unconverted and are not comparable with
+the rest of the table. The card says so.
+
 ## Running it
 
 Open `index.html`. That is the whole procedure. It works from a local file, from a USB stick,
