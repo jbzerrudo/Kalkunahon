@@ -900,8 +900,13 @@ function apparentTempBOM(t, rh, vMs){
 }
 
 /* --- 2.9 Simplified WBGT (BOM approximation; no radiation or wind input) --- */
+/* BOM publishes this approximation together with the vapour-pressure expression it is to be
+   used with, e = rh/100 * 6.105 * exp(17.27 t/(237.7+t)). Substituting the engine's own Magnus
+   (AERK) form is more accurate as saturation vapour pressure and less accurate as BOM's
+   approximation: it shifted the answer by up to 0.26 K at 50 C and saturation, and flipped the
+   printed digit at ordinary Philippine conditions. */
 function wbgtSimple(t, rh){
-  const e = (rh/100)*esWater(t);
+  const e = (rh/100) * 6.105 * Math.exp(17.27*t/(237.7+t));
   return 0.567*t + 0.393*e + 3.94;
 }
 
@@ -2404,12 +2409,17 @@ const HI_BRANCH = {
   'rothfusz+dry adj':   'Rothfusz + dry-air adjustment',
   'rothfusz+humid adj': 'Rothfusz + humid adjustment'
 };
+/* Masterton & Richardson (1979), Table 2, "Humidex related to comfort", verbatim. The band
+   edges here were already theirs, 20 / 30 / 40 / 46, but the words were not: the card used to
+   say "dangerous, heat stroke quite possible" at the top, which is a clinical claim the cited
+   report does not make. Its top band is about restricting labour. No wording is added that the
+   source does not contain, the same rule this app follows for the KNMI hittekracht scale. */
 function humidexBand(h){
-  if(h<20) return 'no discomfort';
-  if(h<30) return 'little to no discomfort';
-  if(h<40) return 'some discomfort';
-  if(h<46) return 'great discomfort, avoid exertion';
-  return 'dangerous, heat stroke quite possible';
+  if(h<20) return 'below the published table';
+  if(h<30) return 'comfortable';
+  if(h<40) return 'varying degrees of discomfort';
+  if(h<46) return 'almost everyone uncomfortable';
+  return 'many types of labour must be restricted';
 }
 card('moist', {
   title:'Comfort &amp; heat stress indices',
@@ -2455,7 +2465,7 @@ card('moist', {
       flag = 'Wind chill is defined only at or below 10 °C with wind above about 5 km/h, so it is not reported here. The other indices are for warm conditions and are the relevant ones.';
     return {rows: rowsOf(rows), flag: flag};
   },
-  src:'<b>Heat index:</b> full four-step NWS procedure — simple Steadman form first, Rothfusz regression above 80 °F, then the low-humidity (RH&lt;13%, 80-112 °F) or high-humidity (RH&gt;85%, 80-87 °F) adjustment. Stated error ±1.3 °F against Steadman’s table. <b>Wind chill:</b> 2001 NWS / ECCC index, metric form, valid T ≤ 10 °C and V &gt; 5 km/h. <b>Humidex:</b> ECCC official equation, implemented from the report itself: Masterton, J.M. and Richardson, F.A. (1979), <i>Humidex: A method of quantifying human discomfort due to excessive heat and humidity</i>, Environment Canada, CLI 1-79, Downsview. H = T + 5/9(e &minus; 10) with e = 6.11&middot;exp[5417.7530(1/273.16 &minus; 1/T<sub>d</sub>)] in millibars. Two details most implementations miss. The report defines <b>273.16 as the melting point of ice</b>, which is its own 0 &deg;C, so the constant belongs in <b>both</b> places; putting 273.16 in the first term while converting the dew point with 273.15, which is the usual advice, lands <i>further</i> from the published formula than using 273.15 throughout, by 0.044 against 0.008 over 20 to 50 &deg;C. And the multiplier is <b>5/9</b>, not the truncated 0.5555. The 5417.7530 coefficient is M<sub>w</sub>L/R* from the report&rsquo;s own figures (18.016 g/mol, 597.3 cal/g, 4.186&times;10<sup>7</sup> erg/cal, 8.3144&times;10<sup>7</sup> erg/mol/K), which comes to 5417.7530 exactly. All 18 entries of the report&rsquo;s Table 1 are reproduced. <b>Apparent temperature:</b> Steadman/BOM shade version, AT = T<sub>a</sub> + 0.33e − 0.70ws − 4.00. <b>WBGT:</b> the BOM simplified approximation, <b>not</b> ISO 7243. It assumes moderately high radiation and light wind and takes no radiation or wind input at all, so it cannot respond to sun or shade. For the real thing see the ISO 7243 card below, which needs globe and natural-wet-bulb readings.'
+  src:'<b>Heat index:</b> full four-step NWS procedure — simple Steadman form first, Rothfusz regression above 80 °F, then the low-humidity (RH&lt;13%, 80-112 °F) or high-humidity (RH&gt;85%, 80-87 °F) adjustment. Stated error ±1.3 °F against Steadman’s table. <b>Wind chill:</b> 2001 NWS / ECCC index, metric form, valid T ≤ 10 °C and V &gt; 5 km/h. <b>Humidex:</b> ECCC official equation, implemented from the report itself: Masterton, J.M. and Richardson, F.A. (1979), <i>Humidex: A method of quantifying human discomfort due to excessive heat and humidity</i>, Environment Canada, CLI 1-79, Downsview. H = T + 5/9(e &minus; 10) with e = 6.11&middot;exp[5417.7530(1/273.16 &minus; 1/T<sub>d</sub>)] in millibars. Two details most implementations miss. The report defines <b>273.16 as the melting point of ice</b>, which is its own 0 &deg;C, so the constant belongs in <b>both</b> places; putting 273.16 in the first term while converting the dew point with 273.15, which is the usual advice, lands <i>further</i> from the published formula than using 273.15 throughout, by 0.044 against 0.008 over 20 to 50 &deg;C. And the multiplier is <b>5/9</b>, not the truncated 0.5555. The 5417.7530 coefficient is M<sub>w</sub>L/R* from the report&rsquo;s own figures (18.016 g/mol, 597.3 cal/g, 4.186&times;10<sup>7</sup> erg/cal, 8.3144&times;10<sup>7</sup> erg/mol/K), which comes to 5417.7530 exactly. All 18 entries of the report&rsquo;s Table 1 are reproduced. The comfort band comes from the same report&rsquo;s <b>Table 2</b>, edges and wording both. The card used to read &ldquo;dangerous, heat stroke quite possible&rdquo; above 46, which is a clinical claim Masterton and Richardson do not make: their top band reads <i>many types of labour must be restricted</i>. Nothing is added here that the source does not say. <b>WBGT:</b> the BOM simplified approximation, 0.567T<sub>a</sub> + 0.393e + 3.94, computed with the vapour-pressure expression BOM publishes alongside it, e = RH/100 &middot; 6.105 &middot; exp(17.27T/(237.7+T)), rather than with this engine&rsquo;s own Magnus form, which is the better saturation formula but the wrong one for this approximation. <b>Apparent temperature:</b> Steadman/BOM shade version, AT = T<sub>a</sub> + 0.33e − 0.70ws − 4.00. <b>WBGT:</b> the BOM simplified approximation, <b>not</b> ISO 7243. It assumes moderately high radiation and light wind and takes no radiation or wind input at all, so it cannot respond to sun or shade. For the real thing see the ISO 7243 card below, which needs globe and natural-wet-bulb readings.'
 });
 
 card('moist', {
@@ -3477,7 +3487,7 @@ card('ref', {
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
-  src:'The calculation engine ships with 296 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+  src:'The calculation engine ships with 298 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
 
 /* =================================================================

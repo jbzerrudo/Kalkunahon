@@ -421,6 +421,17 @@ ok('ISO 7243 differs from the BOM approximation',
    ===================================================================== */
 console.log('\n== REGRESSIONS ==');
 
+/* BOM's simplified WBGT is published with the vapour-pressure expression it is to be used with.
+   Computing e with the engine's own Magnus form instead shifted the answer by up to 0.26 K. */
+{
+  const e = t => 0.75 * 6.105 * Math.exp(17.27*t/(237.7+t));
+  ok('BOM WBGT at 32 C / 75% RH', M.wbgtSimple(32,75), 0.567*32 + 0.393*e(32) + 3.94, 1e-9, 'C');
+  ok('and it prints as 36.0, not 36.1', Math.round(M.wbgtSimple(32,75)*10)/10, 36.0, 1e-9, 'C');
+}
+
+/* Humidex comfort bands: Masterton & Richardson (1979) Table 2, edges and wording. */
+
+
 /* Humidex, from Masterton & Richardson (1979), CLI 1-79, read from the report.
    Table 1 converts dew point to h, rounded to whole numbers, and the text gives one worked
    example. The report defines 273.16 as the melting point of ice, so it is its own 0 C and

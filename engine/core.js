@@ -418,8 +418,13 @@ function apparentTempBOM(t, rh, vMs){
 }
 
 /* --- 2.9 Simplified WBGT (BOM approximation; no radiation or wind input) --- */
+/* BOM publishes this approximation together with the vapour-pressure expression it is to be
+   used with, e = rh/100 * 6.105 * exp(17.27 t/(237.7+t)). Substituting the engine's own Magnus
+   (AERK) form is more accurate as saturation vapour pressure and less accurate as BOM's
+   approximation: it shifted the answer by up to 0.26 K at 50 C and saturation, and flipped the
+   printed digit at ordinary Philippine conditions. */
 function wbgtSimple(t, rh){
-  const e = (rh/100)*esWater(t);
+  const e = (rh/100) * 6.105 * Math.exp(17.27*t/(237.7+t));
   return 0.567*t + 0.393*e + 3.94;
 }
 
