@@ -300,16 +300,16 @@ console.log('\n== SUNRISE, SUNSET, DAY LENGTH ==');
 console.log('\n== ACGIH HEAT STRESS SCREENING (2026 TLVs p.242) ==');
 {
   const A=(w,l,a)=>{const r=M.acgihAllocation(w,l,a); return r?r.label:'none';};
-  eq('acclim light 31.0 -> continuous',      A(31.0,'light',true),      'continuous');
+  eq('acclim light 31.0 -> 75-100% work',      A(31.0,'light',true),      '75-100% work');
   eq('acclim light 31.5 -> 25-50%',          A(31.5,'light',true),      '25-50% work');
   eq('acclim light 32.6 -> none',            A(32.6,'light',true),      'none');
-  eq('acclim moderate 28.0 -> continuous',   A(28.0,'moderate',true),   'continuous');
+  eq('acclim moderate 28.0 -> 75-100% work',   A(28.0,'moderate',true),   '75-100% work');
   eq('acclim moderate 28.5 -> 50-75%',       A(28.5,'moderate',true),   '50-75% work');
   eq('acclim heavy 27.5 -> 50-75%',          A(27.5,'heavy',true),      '50-75% work');
   eq('acclim heavy 27.6 -> 25-50%',          A(27.6,'heavy',true),      '25-50% work');
   eq('acclim very heavy 28.0 -> 25-50%',     A(28.0,'veryheavy',true),  '25-50% work');
-  eq('unacclim light 28.0 -> continuous',    A(28.0,'light',false),     'continuous');
-  eq('unacclim moderate 25.0 -> continuous', A(25.0,'moderate',false),  'continuous');
+  eq('unacclim light 28.0 -> 75-100% work',    A(28.0,'light',false),     '75-100% work');
+  eq('unacclim moderate 25.0 -> 75-100% work', A(25.0,'moderate',false),  '75-100% work');
   eq('unacclim moderate 25.1 -> 50-75%',     A(25.1,'moderate',false),  '50-75% work');
   eq('unacclim heavy 24.0 -> 50-75%',        A(24.0,'heavy',false),     '50-75% work');
   eq('unacclim very heavy 27.1 -> none',     A(27.1,'veryheavy',false), 'none');
@@ -420,6 +420,30 @@ ok('ISO 7243 differs from the BOM approximation',
    REGRESSIONS — one per defect found in the September 2026 review
    ===================================================================== */
 console.log('\n== REGRESSIONS ==');
+
+/* ACGIH 2026 TLVs and BEIs, Table 3 on p.242, read from the booklet itself: every value and
+   every deliberately empty cell. Rows are the allocation of work within the hour, so the top
+   row is 75-100%, not continuous work. */
+{
+  const T3 = {
+    acclimatised:   {light:[31.0,31.0,32.0,32.5], moderate:[28.0,29.0,30.0,31.5],
+                     heavy:[null,27.5,29.0,30.5], veryheavy:[null,null,28.0,30.0]},
+    unacclimatised: {light:[28.0,28.5,29.5,30.0], moderate:[25.0,26.0,27.0,29.0],
+                     heavy:[null,24.0,25.5,28.0], veryheavy:[null,null,24.5,27.0]}
+  };
+  const LAB = ['75-100% work','50-75% work','25-50% work','0-25% work'];
+  let bad = [], n = 0;
+  for(const state in T3) for(const load in T3[state]){
+    const rows = M.ACGIH_WBGT[state][load];
+    const want = T3[state][load].map((v,i)=>v===null?null:[LAB[i],v]).filter(Boolean);
+    if(rows.length !== want.length){ bad.push(state+'/'+load+' has '+rows.length+' rows, ACGIH has '+want.length); continue; }
+    rows.forEach((r,i)=>{ n++;
+      if(r[0] !== want[i][0] || Math.abs(r[1]-want[i][1]) > 1e-9) bad.push(state+'/'+load+'/'+r[0]); });
+  }
+  eq('all '+n+' ACGIH Table 3 cells match the printed table', bad.join('; ') || 'none', 'none');
+  eq('heavy work has no 75-100% cell',      M.ACGIH_WBGT.acclimatised.heavy[0][0], '50-75% work');
+  eq('very heavy has no 50-75% cell either', M.ACGIH_WBGT.acclimatised.veryheavy[0][0], '25-50% work');
+}
 
 /* WMO/TD-No. 1555 Table 1.1 in full, transcribed from the document itself
    (systemsengineeringaustralia.com.au/download/WMO_TC_Wind_Averaging_27_Aug_2010.pdf).

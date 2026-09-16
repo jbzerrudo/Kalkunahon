@@ -1097,14 +1097,14 @@ function hittekracht(wbgt){
        are omitted here rather than guessed. --- */
 const ACGIH_WBGT = {
   acclimatised: {
-    light:      [['continuous',31.0],['50-75% work',31.0],['25-50% work',32.0],['0-25% work',32.5]],
-    moderate:   [['continuous',28.0],['50-75% work',29.0],['25-50% work',30.0],['0-25% work',31.5]],
+    light:      [['75-100% work',31.0],['50-75% work',31.0],['25-50% work',32.0],['0-25% work',32.5]],
+    moderate:   [['75-100% work',28.0],['50-75% work',29.0],['25-50% work',30.0],['0-25% work',31.5]],
     heavy:      [                    ['50-75% work',27.5],['25-50% work',29.0],['0-25% work',30.5]],
     veryheavy:  [                                         ['25-50% work',28.0],['0-25% work',30.0]]
   },
   unacclimatised: {
-    light:      [['continuous',28.0],['50-75% work',28.5],['25-50% work',29.5],['0-25% work',30.0]],
-    moderate:   [['continuous',25.0],['50-75% work',26.0],['25-50% work',27.0],['0-25% work',29.0]],
+    light:      [['75-100% work',28.0],['50-75% work',28.5],['25-50% work',29.5],['0-25% work',30.0]],
+    moderate:   [['75-100% work',25.0],['50-75% work',26.0],['25-50% work',27.0],['0-25% work',29.0]],
     heavy:      [                    ['50-75% work',24.0],['25-50% work',25.5],['0-25% work',28.0]],
     veryheavy:  [                                         ['25-50% work',24.5],['0-25% work',27.0]]
   }
@@ -1112,7 +1112,7 @@ const ACGIH_WBGT = {
 /* Least restrictive allocation whose limit is not exceeded, or null if the WBGT
    is above every tabulated limit for that workload.
 
-   ACGIH tabulates no continuous-work entry for heavy or very heavy workloads.
+   ACGIH leaves the 75-100% cell empty for heavy and very heavy workloads.
    Below the lowest limit for those, the table imposes nothing at all, so the
    result is marked untabulated rather than reported as the most permissive row
    that happens to exist. Returning "50-75% work" at a WBGT of 18 would invent a
@@ -1120,7 +1120,7 @@ const ACGIH_WBGT = {
 function acgihAllocation(wbgt, workload, acclimatised){
   const rows = ACGIH_WBGT[acclimatised ? 'acclimatised' : 'unacclimatised'][workload];
   if(!rows || !rows.length) return null;
-  const hasContinuous = rows[0][0] === 'continuous';
+  const hasContinuous = rows[0][0] === '75-100% work';
   for(const [label, limit] of rows){
     if(wbgt <= limit){
       const untabulated = !hasContinuous && label === rows[0][0] && wbgt < rows[0][1];

@@ -1579,14 +1579,14 @@ function hittekracht(wbgt){
        are omitted here rather than guessed. --- */
 const ACGIH_WBGT = {
   acclimatised: {
-    light:      [['continuous',31.0],['50-75% work',31.0],['25-50% work',32.0],['0-25% work',32.5]],
-    moderate:   [['continuous',28.0],['50-75% work',29.0],['25-50% work',30.0],['0-25% work',31.5]],
+    light:      [['75-100% work',31.0],['50-75% work',31.0],['25-50% work',32.0],['0-25% work',32.5]],
+    moderate:   [['75-100% work',28.0],['50-75% work',29.0],['25-50% work',30.0],['0-25% work',31.5]],
     heavy:      [                    ['50-75% work',27.5],['25-50% work',29.0],['0-25% work',30.5]],
     veryheavy:  [                                         ['25-50% work',28.0],['0-25% work',30.0]]
   },
   unacclimatised: {
-    light:      [['continuous',28.0],['50-75% work',28.5],['25-50% work',29.5],['0-25% work',30.0]],
-    moderate:   [['continuous',25.0],['50-75% work',26.0],['25-50% work',27.0],['0-25% work',29.0]],
+    light:      [['75-100% work',28.0],['50-75% work',28.5],['25-50% work',29.5],['0-25% work',30.0]],
+    moderate:   [['75-100% work',25.0],['50-75% work',26.0],['25-50% work',27.0],['0-25% work',29.0]],
     heavy:      [                    ['50-75% work',24.0],['25-50% work',25.5],['0-25% work',28.0]],
     veryheavy:  [                                         ['25-50% work',24.5],['0-25% work',27.0]]
   }
@@ -1594,7 +1594,7 @@ const ACGIH_WBGT = {
 /* Least restrictive allocation whose limit is not exceeded, or null if the WBGT
    is above every tabulated limit for that workload.
 
-   ACGIH tabulates no continuous-work entry for heavy or very heavy workloads.
+   ACGIH leaves the 75-100% cell empty for heavy and very heavy workloads.
    Below the lowest limit for those, the table imposes nothing at all, so the
    result is marked untabulated rather than reported as the most permissive row
    that happens to exist. Returning "50-75% work" at a WBGT of 18 would invent a
@@ -1602,7 +1602,7 @@ const ACGIH_WBGT = {
 function acgihAllocation(wbgt, workload, acclimatised){
   const rows = ACGIH_WBGT[acclimatised ? 'acclimatised' : 'unacclimatised'][workload];
   if(!rows || !rows.length) return null;
-  const hasContinuous = rows[0][0] === 'continuous';
+  const hasContinuous = rows[0][0] === '75-100% work';
   for(const [label, limit] of rows){
     if(wbgt <= limit){
       const untabulated = !hasContinuous && label === rows[0][0] && wbgt < rows[0][1];
@@ -2362,9 +2362,9 @@ card('moist', {
       ['dewpoint',          N(td,2), '°C', 'hero'],
       ['wet-bulb (psychrometric)', N(twP,2), '°C', 'hero'],
       ['wet-bulb (Stull 2011)', N(twS,2), '°C', stullOK?'':'dim'],
-      ['vapour pressure e',  N(e,3),  'hPa'],
+      ['vapour pressure e',  N(e,2),  'hPa'],
       ['saturation e<sub>s</sub>', N(es,3), 'hPa', 'dim'],
-      ['mixing ratio w',     N(w*1000,3), 'g/kg'],
+      ['mixing ratio w',     N(w*1000,2), 'g/kg'],
       ['specific humidity q',N(q*1000,3), 'g/kg'],
       ['absolute humidity',  N(M.absoluteHumidity(e,tK),2), 'g/m³'],
       ['virtual temperature',N(M.virtualTemp(tK,w)-273.15,2), '°C'],
@@ -2628,7 +2628,7 @@ card('moist', {
             labels: {s: clear ? 'not needed in clear-sky mode' : 'Global radiation W/m²'},
             disable: {s: clear}};
   },
-  src:'<b>Liljegren, J.C., Carhart, R.A., Lawday, P., Tschopp, S. and Sharp, R. (2008)</b>, <i>Modeling the Wet Bulb Globe Temperature Using Standard Meteorological Measurements</i>, J Occup Environ Hyg <b>5</b>, 645-655. Implemented from Liljegren&rsquo;s own reference C code (UChicago Argonne, LLC, 2008), redistributed under the MIT licence at github.com/mdljts/wbgt: iterative energy balances on a 50.8 mm black globe and a 7 mm wetted wick, with the direct beam split off by f<sub>dir</sub> = exp(3 &minus; 1.34&middot;n &minus; 1.65/n) on the normalised irradiance. The 0-10 banding is <b>KNMI Technical Report TR-26-04</b>, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i> (2026), Table 1: band 0 below 14 °C, then 2 °C steps to band 10 at 32 °C and above. KNMI publishes <b>no qualitative label for any level</b>: TR-26-04 calls hittekracht a communication scale and leaves interpretation to end users and professionals, and the KNMI explainer declines to give per-level advice because the response depends on age, health, activity and clothing. The frequency statements shown are KNMI&rsquo;s own: 8 or more is significant and occurs on about 2.3 days a year on average, 9 is rare and possible from 25 °C, 10 is extremely rare, and Dutch heatwaves between 1991 and 2024 usually sat at 6-7. Wind must be the 2 m value: Liljegren&rsquo;s stability-based adjustment from other measurement heights is <b>not</b> implemented here, so convert first if your anemometer sits at 10 m. KNMI runs this same model through the Kong and Huber (2022) port, so small differences from the KNMI app are expected. <br><br><b>Sources for the scale itself.</b> The banding: KNMI, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i>, Technical Report TR-26-04 (2026), Table 1, at knmi.nl/kennis-en-datacentrum/publicatie/van-wet-bulb-globe-temperature-wbgt-naar-hittekracht. The frequency statements: KNMI, <i>Hittekracht</i>, knmi.nl/kennis-en-datacentrum/uitleg/hittekracht. The underlying WBGT method KNMI uses: Kong, Q. and Huber, M. (2022), <i>Explicit Calculations of Wet-Bulb Globe Temperature Compared With Approximations and Why It Matters for Labor Productivity</i>, Earth&rsquo;s Future <b>10</b>, e2021EF002334. <br><br><b>The work allocation rows are a different standard and a different purpose.</b> They are the <b>ACGIH</b> heat-stress screening criteria, <i>2026 TLVs and BEIs</i>, p.242, as reproduced by the Canadian Centre for Occupational Health and Safety: the Threshold Limit Value for acclimatised workers and the Action Limit for unacclimatised ones, assuming an 8-hour day in a 5-day week with conventional breaks. They screen <b>occupational exposure for working adults</b> and say nothing about the general public, which is what hittekracht addresses. Where the published table has no entry for a workload at a given allocation, no value is shown rather than one inferred. ISO 7243 covers the same ground with its own reference values, which are not reproduced here. <br><br><b>No UTCI is derived here, deliberately.</b> It is tempting to feed the computed globe temperature into ISO 7726 and get a mean radiant temperature for free. It does not work: Liljegren&rsquo;s 50.8 mm globe and ISO 7726&rsquo;s forced-convection formula use different convection correlations, so the round trip returns a T<sub>mrt</sub> far above anything physical. For UTCI, use the UTCI card with a black-globe reading or a modelled T<sub>mrt</sub>.'
+  src:'<b>Liljegren, J.C., Carhart, R.A., Lawday, P., Tschopp, S. and Sharp, R. (2008)</b>, <i>Modeling the Wet Bulb Globe Temperature Using Standard Meteorological Measurements</i>, J Occup Environ Hyg <b>5</b>, 645-655. Implemented from Liljegren&rsquo;s own reference C code (UChicago Argonne, LLC, 2008), redistributed under the MIT licence at github.com/mdljts/wbgt: iterative energy balances on a 50.8 mm black globe and a 7 mm wetted wick, with the direct beam split off by f<sub>dir</sub> = exp(3 &minus; 1.34&middot;n &minus; 1.65/n) on the normalised irradiance. The 0-10 banding is <b>KNMI Technical Report TR-26-04</b>, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i> (2026), Table 1: band 0 below 14 °C, then 2 °C steps to band 10 at 32 °C and above. KNMI publishes <b>no qualitative label for any level</b>: TR-26-04 calls hittekracht a communication scale and leaves interpretation to end users and professionals, and the KNMI explainer declines to give per-level advice because the response depends on age, health, activity and clothing. The frequency statements shown are KNMI&rsquo;s own: 8 or more is significant and occurs on about 2.3 days a year on average, 9 is rare and possible from 25 °C, 10 is extremely rare, and Dutch heatwaves between 1991 and 2024 usually sat at 6-7. Wind must be the 2 m value: Liljegren&rsquo;s stability-based adjustment from other measurement heights is <b>not</b> implemented here, so convert first if your anemometer sits at 10 m. KNMI runs this same model through the Kong and Huber (2022) port, so small differences from the KNMI app are expected. <br><br><b>Sources for the scale itself.</b> The banding: KNMI, <i>Van Wet Bulb Globe Temperature (WBGT) naar hittekracht</i>, Technical Report TR-26-04 (2026), Table 1, at knmi.nl/kennis-en-datacentrum/publicatie/van-wet-bulb-globe-temperature-wbgt-naar-hittekracht. The frequency statements: KNMI, <i>Hittekracht</i>, knmi.nl/kennis-en-datacentrum/uitleg/hittekracht. The underlying WBGT method KNMI uses: Kong, Q. and Huber, M. (2022), <i>Explicit Calculations of Wet-Bulb Globe Temperature Compared With Approximations and Why It Matters for Labor Productivity</i>, Earth&rsquo;s Future <b>10</b>, e2021EF002334. <br><br><b>The work allocation rows are a different standard and a different purpose.</b> They are the <b>ACGIH</b> heat-stress screening criteria: <i>2026 TLVs and BEIs</i> (26th edition, ACGIH, Cincinnati, ISBN 978-1-60726-178-0), Physical Agents, Thermal Stress, <b>Heat Stress and Strain</b> beginning p.236, <b>Table 3 on p.242</b>, documentation date 2022. All 28 values and the empty cells were read from that table. It gives the Threshold Limit Value for acclimatised workers and the Action Limit for unacclimatised ones, over an 8-hour day in a 5-day week with conventional breaks, and its rows are the <b>allocation of work within each hour of a work and recovery cycle</b>, which is why the top row is 75-100% rather than continuous work. They screen <b>occupational exposure for working adults</b> and say nothing about the general public, which is what hittekracht addresses. Where the published table has no entry for a workload at a given allocation, no value is shown rather than one inferred. <br><br><b>One caution that matters more than the numbers.</b> Table 3 is indexed on <b>WBGT<sub>eff</sub></b>, the effective WBGT, which is the measured WBGT <i>plus</i> a Clothing Adjustment Value from ACGIH&rsquo;s Table 2. The WBGT shown above is the measured outdoor value, so it is the right input only for ordinary work clothes, a long-sleeved shirt and trousers, whose adjustment is zero. Add the CAV before reading the rows for anything else: +0.5 &deg;C for SMS polypropylene coveralls, +1 for polyolefin coveralls, +3 for double-layer woven clothing, +11 for limited-use vapour-barrier coveralls with a hood, and a further +1 for adding a hood. ACGIH states these must not be used for fully encapsulating suits, and that they cannot simply be added together for multiple layers. ISO 7243 covers the same ground with its own reference values, which are not reproduced here. <br><br><b>No UTCI is derived here, deliberately.</b> It is tempting to feed the computed globe temperature into ISO 7726 and get a mean radiant temperature for free. It does not work: Liljegren&rsquo;s 50.8 mm globe and ISO 7726&rsquo;s forced-convection formula use different convection correlations, so the round trip returns a T<sub>mrt</sub> far above anything physical. For UTCI, use the UTCI card with a black-globe reading or a modelled T<sub>mrt</sub>.'
 });
 
 
@@ -2690,11 +2690,19 @@ card('moist', {
       ['&nbsp;&nbsp;humidity it assumed', N(rhApprox,0), '%', 'dim']
     ];
     let flag = null;
-    if(v.tg < v.t) flag = 'A globe reading below air temperature implies a net radiative <b>loss</b>, which happens under a clear night sky but not in sun. T<sub>mrt</sub> comes out below air temperature, which is correct for that case.';
+    const wGlobe = M.scaleWind(Math.max(v.w,0), 1.1);
+    if(v.tg > v.t && wGlobe < 0.5) flag = '<b>The radiant temperature above is a lower bound in air this still.</b> '
+      + 'ISO 7726 gives two relations for T<sub>mrt</sub> from a globe, one for forced and one for natural convection, '
+      + 'and directs you to whichever yields the larger convection coefficient. <b>Only the forced-convection relation is '
+      + 'implemented here</b>, and its whole correction term carries a factor of v<sup>0.6</sup>, so as the wind falls the term '
+      + 'vanishes and T<sub>mrt</sub> collapses onto the globe reading itself: at zero wind this card returns T<sub>mrt</sub> = T<sub>g</sub> '
+      + 'exactly, which cannot be right when the globe is ' + N(v.tg - v.t,1) + ' K above air temperature. The true value is higher. '
+      + 'Still air is also when radiant load matters most, so treat this figure as a floor and not an estimate.';
+    else if(v.tg < v.t) flag = 'A globe reading below air temperature implies a net radiative <b>loss</b>, which happens under a clear night sky but not in sun. T<sub>mrt</sub> comes out below air temperature, which is correct for that case.';
     else flag = '<b>That risk level is an exercise scale, not a universal one.</b> It comes from Japan’s Ministry of the Environment, after the Japan Sports Association, and assumes physical activity. ISO 7243’s own occupational limits are not a single scale at all: they vary with metabolic rate, acclimatisation and clothing, so the same WBGT is acceptable for light seated work and unacceptable for heavy labour. ISO 7243 is a <b>screening</b> method for exposure over a working day of up to 8 hours, for healthy adults, and does not apply to brief exposures.';
     return {rows: rowsOf(rows), flag: flag};
   },
-  src:'<b>ISO 7243:2017</b>, <i>Ergonomics of the thermal environment — Assessment of heat stress using the WBGT index</i>. Weights confirmed numerically against a reference implementation. Mean radiant temperature from the globe by the <b>ISO 7726</b> forced-convection relation, T<sub>mrt</sub> = [T<sub>g</sub>⁴ + (1.1×10⁸·v<sup>0.6</sup>)/(ε·D<sup>0.4</sup>)·(T<sub>g</sub> − T<sub>a</sub>)]<sup>1/4</sup>, with ε = 0.95 and the wind scaled from 10 m down to globe height by the log law, as ECMWF’s thermofeel does it. The UTCI row is a convenience: a globe reading is exactly what UTCI’s missing fourth input needs. WBGT has been Japan’s national heat-illness index since 2006 and NWS recommends it over the heat index for vigorous activity in full sun.'
+  src:'<b>ISO 7243:2017</b>, <i>Ergonomics of the thermal environment — Assessment of heat stress using the WBGT index</i>. Weights confirmed numerically against a reference implementation. Mean radiant temperature from the globe by the <b>ISO 7726</b> forced-convection relation <b>only</b> (the standard also gives a natural-convection relation, to be used where it yields the larger coefficient; it is not implemented here, so T<sub>mrt</sub> is a lower bound in still air and the card says so), T<sub>mrt</sub> = [T<sub>g</sub>⁴ + (1.1×10⁸·v<sup>0.6</sup>)/(ε·D<sup>0.4</sup>)·(T<sub>g</sub> − T<sub>a</sub>)]<sup>1/4</sup>, with ε = 0.95 and the wind scaled from 10 m down to globe height by the log law, as ECMWF’s thermofeel does it. The UTCI row is a convenience: a globe reading is exactly what UTCI’s missing fourth input needs. WBGT has been Japan’s national heat-illness index since 2006 and NWS recommends it over the heat index for vigorous activity in full sun.'
 });
 
 card('moist', {
@@ -2975,8 +2983,8 @@ card('thermo', {
       ['equivalent potential &theta;<sub>e</sub>', N(the,2), 'K', 'hero'],
       ['virtual temperature T<sub>v</sub>', N(tv-273.15,2), '°C'],
       ['virtual potential &theta;<sub>v</sub>', N(th*(1+0.61*w),2), 'K'],
-      ['mixing ratio w', N(w*1000,3), 'g/kg'],
-      ['vapour pressure e', N(e,3), 'hPa', 'dim'],
+      ['mixing ratio w', N(w*1000,2), 'g/kg'],
+      ['vapour pressure e', N(e,2), 'hPa', 'dim'],
       ['relative humidity', N(M.rhFromDewpoint(v.t,v.td),1), '%', 'dim'],
       ['temperature at LCL (T<sub>L</sub>)', N(TL,2), 'K', 'dim'],
       ['&theta;<sub>e</sub> − &theta;', N(the-th,2), 'K', 'dim']
@@ -3458,7 +3466,7 @@ card('ref', {
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
-  src:'The calculation engine ships with 289 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+  src:'The calculation engine ships with 292 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
 
 /* =================================================================
