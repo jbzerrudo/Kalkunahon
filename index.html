@@ -598,18 +598,18 @@ const TC_SCALES = [
      ceilings of a metric ladder, as this table did before, put every one of CMA's and KMA's own
      published thresholds one band low: CMA's 10.8 m/s is 20.995 kt, which a ">= 21 kt" test
      reads as weaker than a depression. */
-  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific', unit:'kt',
+  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific', unit:'kt', pub:['kt','kmh'],
     // kt and km/h both published at nhc.noaa.gov/aboutsshws.php (119/154/178/209/252 km/h).
     bands:[ {lo:0,   kmh:0,   name:'Tropical Depression'}, {lo:34,  kmh:63,  name:'Tropical Storm'},
             {lo:64,  kmh:119, name:'Category 1'},          {lo:83,  kmh:154, name:'Category 2'},
             {lo:96,  kmh:178, name:'Category 3 (major)'},  {lo:113, kmh:209, name:'Category 4 (major)'},
             {lo:137, kmh:252, name:'Category 5 (major)'} ] },
-  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific', unit:'kt',
+  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific', unit:'kt', pub:['kt','ms'],
     // JMA publishes m/s and knots side by side (jma.go.jp: 33 m/s = 64 kt, 44 = 85, 54 = 105).
     bands:[ {lo:0,  ms:0,    name:'Tropical Depression'},   {lo:34, ms:17.2, name:'Tropical Storm'},
             {lo:48, ms:24.5, name:'Severe Tropical Storm'}, {lo:64, ms:32.7, name:'Typhoon'},
             {lo:85, ms:44,   name:'Typhoon (Very Strong)'}, {lo:105,ms:54,   name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR', unit:'kt',
+  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR', unit:'kt', pub:['kt','kmh'],
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
     // PAGASA publishes both ladders (pagasa.dost.gov.ph, scale effective 23 March 2022) and they
@@ -623,20 +623,29 @@ const TC_SCALES = [
             {lo:48, kmh:89,  name:'Severe Tropical Storm'},
             {lo:64, kmh:118, name:'Typhoon'},
             {lo:100,kmh:185, name:'Super Typhoon'} ] },
-  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region', unit:'kt',
-    // BOM publishes its categories in km/h. Those figures are not carried here because they were
-    // not confirmed from a BOM page; the knot bounds are the ones this table has always used.
-    bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
-            {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
-            {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
-  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific', unit:'kt',
+  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region', unit:'kmh', pub:['kmh'],
+    // BOM defines its categories on the MAXIMUM MEAN wind in km/h: Cat 1 63-88, Cat 2 89-117,
+    // Cat 3 118-159, Cat 4 160-199, Cat 5 above 200 (bom.gov.au, Tropical cyclone categories).
+    // The same page prints a "typical strongest gust" beside each, which is a different quantity
+    // and is not used here. The knot figures are exact conversions, carried for display only,
+    // and replace an earlier set that mixed floors with ceilings: 118 km/h had been stored as
+    // 64 kt, which is 118.5 km/h, so BOM's own Category 3 floor came back as Category 2.
+    // BOM's classes are integer km/h bands with a gap at each join (88 to 89, 117 to 118,
+    // 159 to 160, 199 to 200), so the floor is what is stored and the comparison is >=.
+    bands:[ {lo:0,        kmh:0,   name:'below Category 1'},
+            {lo:34.01728, kmh:63,  name:'Category 1'},
+            {lo:48.05616, kmh:89,  name:'Category 2'},
+            {lo:63.71490, kmh:118, name:'Category 3 (severe)'},
+            {lo:86.39309, kmh:160, name:'Category 4 (severe)'},
+            {lo:107.99136,kmh:200, name:'Category 5 (severe)'} ] },
+  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific', unit:'kt', pub:['kt','kmh'],
     // Knots from IBTrACS v04r01 Technical Details (LW <22, TD 22-33, TS 34-47, STS 48-63,
     // T 64-80, ST 81-99, SuperT >=100 kt); km/h as HKO prints them at hko.gov.hk.
     bands:[ {lo:0,  kmh:0,   name:'Low'},                   {lo:22, kmh:41,  name:'Tropical Depression'},
             {lo:34, kmh:63,  name:'Tropical Storm'},        {lo:48, kmh:88,  name:'Severe Tropical Storm'},
             {lo:64, kmh:118, name:'Typhoon'},               {lo:81, kmh:150, name:'Severe Typhoon'},
             {lo:100,kmh:185, name:'Super Typhoon'} ] },
-  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific', unit:'ms',
+  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific', unit:'ms', pub:['ms'],
     // Chinese National Standard, in force since 15 June 2006. IBTrACS v04r01 Technical Details
     // states the bounds in m/s, and m/s is what CMA is compared in. The knot figures are the
     // exact conversions, carried for display only.
@@ -647,14 +656,14 @@ const TC_SCALES = [
             {lo:63.564, ms:32.7, name:'Typhoon'},
             {lo:80.670, ms:41.5, name:'Severe Typhoon'},
             {lo:99.125, ms:51.0, name:'Super Typhoon'} ] },
-  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific', unit:'ms',
+  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific', unit:'ms', pub:['ms'],
     // IBTrACS v04r01 Technical Details: TD 14-17, TS 17-25, STS 25-33, TY >=33 m/s.
     bands:[ {lo:0,      ms:0,  name:'Low'},
             {lo:27.214, ms:14, name:'Tropical Depression'},
             {lo:33.045, ms:17, name:'Tropical Storm'},
             {lo:48.596, ms:25, name:'Severe Tropical Storm'},
             {lo:64.147, ms:33, name:'Typhoon'} ] },
-  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean', unit:'kt',
+  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean', unit:'kt', pub:['kt'],
     // IBTrACS v04r01 Technical Details, stated directly in knots.
     bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
             {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},
@@ -666,16 +675,25 @@ const TC_SCALES = [
    disagree at a boundary (PAGASA prints the Typhoon floor as both 64 kt and 118 km/h, and
    118 km/h is 63.7 kt) the answer follows the user's unit rather than silently preferring one.
    Agencies that publish in one unit only are always compared in that unit. */
-const BOUND_KEY = {kt:'lo', kmh:'kmh', ms:'ms'};
+const BOUND_KEY  = {kt:'lo', kmh:'kmh', ms:'ms'};
+const BOUND_PREC = {kt:0, kmh:0, ms:1};             // decimals each agency reports its ladder in
 function classify(vKt, scale, unit){
   const bands = scale.bands || scale;               // accepts a bare band array for old callers
   if(!isNum(vKt) || vKt < 0) return null;           // a negative wind is not on any scale
-  let key = BOUND_KEY[unit];
-  if(!key || !bands.every(b=>isNum(b[key]))) key = BOUND_KEY[scale.unit] || 'lo';
-  const u = key==='lo' ? 'kt' : (key==='kmh' ? 'kmh' : 'ms');
-  const x = speedTo(vKt, 'kt', u);
+  /* Only a unit the agency actually publishes counts as a ladder. Every scale also carries knot
+     values so the tables have something to print, but for BOM, CMA and KMA those are this app's
+     conversions, not agency numbers, and comparing against them is not the same question. */
+  const pub = scale.pub || ['kt'];
+  const u   = pub.indexOf(unit) >= 0 ? unit : (scale.unit || 'kt');
+  const key = BOUND_KEY[u];
+  let x = speedTo(vKt, 'kt', u);
+  /* Where the wind had to be converted into the agency's unit, round it to the precision that
+     agency reports in first. A ladder only means anything at the precision it is published at:
+     BOM's Category 1 floor of 63 km/h is 34 kt to the knot, and 34 kt converts to 62.97, which
+     would otherwise fall below BOM's own gale threshold. */
+  if(u !== unit){ const p = Math.pow(10, BOUND_PREC[u]); x = Math.round(x*p)/p; }
   let out = null;
-  for(const b of bands) if(x >= b[key] - 1e-9) out = b;
+  for(const b of bands) if(isNum(b[key]) && x >= b[key] - 1e-9) out = b;
   return out;
 }
 /* Convert an input wind of a given averaging period into each scale's
@@ -2034,7 +2052,10 @@ function card(mod, spec){
        until permission does, and a button disabled on click would stay disabled for good. */
     lbtn.addEventListener('click', ()=>{
       api.say('Asking your device for a location. Answer the permission prompt if your browser shows one.');
-      spec.locate.fill(api);
+      /* A hardened WebView or a privacy extension can make getCurrentPosition throw on the spot
+         rather than call the error callback, which would leave the note stuck on the line above. */
+      try{ spec.locate.fill(api); }
+      catch(e){ api.say('This browser refused the location request outright. Type the coordinates in yourself.'); run(); }
     });
   }
   run();
@@ -2177,7 +2198,7 @@ card('wind', {
       ])
     };
   },
-  src:'<b>WMO/TD-No. 1555</b> Table 1.1. G(&tau;, T<sub>0</sub>) converts a mean wind of averaging period T<sub>0</sub> into the expected maximum &tau;-second gust within that period. A 3-second average only counts as “the gust” if it is the highest 3-second average in the interval.'
+  src:'<b>WMO/TD-No. 1555</b> Table 1.1, all 76 entries checked against the published table itself (Harper, Kepert &amp; Ginger, 2010). G(&tau;, T<sub>0</sub>) converts a mean wind of averaging period T<sub>0</sub> into the expected maximum &tau;-second gust within that period. A 3-second average only counts as “the gust” if it is the highest 3-second average in the interval.'
 });
 
 card('wind', {
@@ -2419,7 +2440,7 @@ card('moist', {
     if(tF > 112 && rh < 13 && hi.branch === 'rothfusz')
       flag = 'Above <b>112&nbsp;&deg;F (44.4&nbsp;&deg;C)</b> in air this dry, the NWS procedure has no adjustment to apply: its dry-air correction takes the square root of (17&nbsp;&minus;&nbsp;|T&nbsp;&minus;&nbsp;95|)/17, which turns negative there. What is shown is the bare Rothfusz regression extrapolated past the published chart, which ends at 110&nbsp;&deg;F, and at this corner it returns a heat index <b>below</b> the air temperature. Do not use it. Read the WBGT or UTCI cards instead.';
     else if(hi.hi>110 && hi.branch!=='simple')
-      flag = 'Above about 110 °F the Rothfusz polynomial extrapolates badly — at 104 °F and 60% RH it overshoots the published NWS chart by roughly 8 °F. Treat high heat-index values as indicative only. Lu &amp; Romps (2022) rebuilt the underlying model to fix exactly this.';
+      flag = 'Above about 110 °F the Rothfusz polynomial is extrapolating. <b>The NWS chart stops printing numbers here</b>: its own page marks the extreme-danger region in red <i>without values</i>, so there is nothing published to check these figures against. Where NWS does publish a value the regression is exact, and this app reproduces the worked example on weather.gov (96 °F at 65% RH gives 121 °F) to the tenth. Treat anything above the printed chart as indicative only. Lu &amp; Romps (2022) rebuilt the underlying model to fix exactly this.';
     else if(!wcOK)
       flag = 'Wind chill is defined only at or below 10 °C with wind above about 5 km/h, so it is not reported here. The other indices are for warm conditions and are the relevant ones.';
     return {rows: rowsOf(rows), flag: flag};
@@ -2626,6 +2647,17 @@ card('moist', {
   rule:'This card needs two instrument readings. The <b>natural wet bulb</b> is an unaspirated wet bulb sitting in the ambient airflow, <b>not</b> the psychrometric wet bulb from the humidity solver, and it reads higher. The <b>globe temperature</b> comes from a black sphere, standard diameter 150 mm. Substituting the psychrometric wet bulb underestimates WBGT, so this card asks for the measurements rather than inventing them.<br><br><b>No globe or wet bulb?</b> The comfort card above gives the BOM approximation from temperature and humidity alone. It is a reasonable screening figure, but it has no radiation or wind term at all, so it cannot tell sun from shade. For the radiation part specifically, the UTCI card brackets the answer between shade and strong sun without needing any instrument.',
   compute(v){
     const solar = v.exp === 'sun';
+    /* Globe diameter is not optional here. The engine treats it as an optional argument and
+       falls back to 0.15 m, so an empty or zero box silently produced the standard-globe
+       answer on a card whose own table exists to show that diameter changes it. */
+    const blankISO = [['t','air temperature'],['tnw','natural wet bulb'],['tg','globe temperature'],
+                      ['w','wind'],['d','globe diameter']]
+                       .filter(f => !isFinite(v[f[0]])).map(f => f[1]);
+    if(blankISO.length || v.d <= 0)
+      return {rows: rowsOf([['WBGT','—','','hero'],['mean radiant temperature','—','°C','hero']]),
+        flag: blankISO.length
+          ? 'Nothing is computed until every box is filled. Empty: <b>'+blankISO.join(', ')+'</b>.'
+          : 'Globe diameter must be greater than zero. The standard globe is 0.15 m, and this card will not substitute it: the table below exists precisely because a 25 mm globe and a 150 mm globe give different radiant temperatures from the same reading.'};
     if(v.tnw > v.t){
       return {
         rows: rowsOf([
@@ -3365,7 +3397,7 @@ card('ref', {
     for(const s of M.TC_SCALES){
       s.bands.forEach((b,i)=>{
         const cells = UNITS.map(([unit,key,dp])=>{
-          const own = s.bands.every(x=>x[key]!==undefined);
+          const own = (s.pub||['kt']).indexOf(unit) >= 0;
           const val = own ? b[key] : M.speedTo(b.lo,'kt',unit);
           const txt = N(val, dp);
           return own ? '<b>'+txt+'</b>' : '<span class="conv">'+txt+'</span>';
@@ -3378,7 +3410,7 @@ card('ref', {
     return {html: tbl([['Scale'],['Class'],['from kt',1],['from km/h',1],['from m/s',1]], rows, true)
       + '<div class="rule">Each figure is the <b>floor</b> of that class: the class runs from it up to the floor of the next one. <b>Bold</b> is what the agency itself publishes; grey is an exact conversion of the bold figure, shown for comparison and not an agency number. Where an agency publishes two ladders they are not always exact conversions of each other, so read the bold column that matches how you work. These scales use <b>different averaging periods</b> and are not directly comparable: a 10-minute 64 kt typhoon is roughly a 1-minute 69 kt system, so convert with Table 1.2 first.</div>'};
   },
-  src:'Knots for NHC from nhc.noaa.gov/aboutsshws.php, which also publishes the km/h figures shown. JMA publishes m/s and knots together. PAGASA thresholds effective 23 March 2022, at pagasa.dost.gov.ph; PAGASA prints the STS floor inconsistently (87 km/h against a Tropical Storm class printed as ending at 88), and 89 is used here because it is what the published 48 kt floor converts to and it leaves no overlap. HKO knots from IBTrACS v04r01 Technical Details and km/h from hko.gov.hk. CMA and KMA m/s, and IMD knots, from IBTrACS v04r01 Technical Details. BOM knot values are the ones this table has always carried; BOM publishes its categories in km/h and those figures are not reproduced here because they were not confirmed from a BOM page.'
+  src:'Knots for NHC from nhc.noaa.gov/aboutsshws.php, which also publishes the km/h figures shown. JMA publishes m/s and knots together. PAGASA thresholds effective 23 March 2022, at pagasa.dost.gov.ph; PAGASA prints the STS floor inconsistently (87 km/h against a Tropical Storm class printed as ending at 88), and 89 is used here because it is what the published 48 kt floor converts to and it leaves no overlap. HKO knots from IBTrACS v04r01 Technical Details and km/h from hko.gov.hk. CMA and KMA m/s, and IMD knots, from IBTrACS v04r01 Technical Details. BOM categories from bom.gov.au, <i>Tropical cyclone categories</i>, which defines them on the <b>maximum mean wind</b> in km/h; the &ldquo;typical strongest gust&rdquo; printed beside each on that page is a different quantity and is not used. That page states no averaging period, so the 10-minute figure shown elsewhere here still rests on WMO IWTC-VII rather than on BOM directly, and &ldquo;below Category 1&rdquo; is this app&rsquo;s label, not a BOM class.'
 });
 
 card('ref', {
@@ -3426,7 +3458,7 @@ card('ref', {
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
-  src:'The calculation engine ships with 274 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+  src:'The calculation engine ships with 289 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
 
 /* =================================================================

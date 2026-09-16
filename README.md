@@ -61,7 +61,7 @@ classifying, and refuses to convert where WMO publishes no factor.
 
 ## Accuracy
 
-The calculation engine ships with 274 numerical assertions checked against published worked
+The calculation engine ships with 289 numerical assertions checked against published worked
 examples, including Stull's saturated adiabat (10 C, 70 kPa -> 4.58 K/km), Bolton's equivalent
 potential temperature, Romps' LCL values to sub-metre, NWS heat-index chart values, the ISA
 tropopause at 226.32 hPa, and every published tropical cyclone threshold of all eight agencies
@@ -101,7 +101,7 @@ icon-192.png           required for the install prompt
 icon-512.png           required for the install prompt
 sw.js                  service worker, so the installed app works with no connection
 engine/core.js         the calculation engine, no dependencies
-engine/test.js         274 assertions against published values
+engine/test.js         289 assertions against published values
 CITATION.cff           citation metadata, also what GitHub's "Cite this repository" reads
 og-card-v2.png         link preview image
 .nojekyll              stops GitHub Pages running Jekyll over the files

@@ -116,18 +116,18 @@ const TC_SCALES = [
      ceilings of a metric ladder, as this table did before, put every one of CMA's and KMA's own
      published thresholds one band low: CMA's 10.8 m/s is 20.995 kt, which a ">= 21 kt" test
      reads as weaker than a depression. */
-  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific', unit:'kt',
+  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific', unit:'kt', pub:['kt','kmh'],
     // kt and km/h both published at nhc.noaa.gov/aboutsshws.php (119/154/178/209/252 km/h).
     bands:[ {lo:0,   kmh:0,   name:'Tropical Depression'}, {lo:34,  kmh:63,  name:'Tropical Storm'},
             {lo:64,  kmh:119, name:'Category 1'},          {lo:83,  kmh:154, name:'Category 2'},
             {lo:96,  kmh:178, name:'Category 3 (major)'},  {lo:113, kmh:209, name:'Category 4 (major)'},
             {lo:137, kmh:252, name:'Category 5 (major)'} ] },
-  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific', unit:'kt',
+  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific', unit:'kt', pub:['kt','ms'],
     // JMA publishes m/s and knots side by side (jma.go.jp: 33 m/s = 64 kt, 44 = 85, 54 = 105).
     bands:[ {lo:0,  ms:0,    name:'Tropical Depression'},   {lo:34, ms:17.2, name:'Tropical Storm'},
             {lo:48, ms:24.5, name:'Severe Tropical Storm'}, {lo:64, ms:32.7, name:'Typhoon'},
             {lo:85, ms:44,   name:'Typhoon (Very Strong)'}, {lo:105,ms:54,   name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR', unit:'kt',
+  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR', unit:'kt', pub:['kt','kmh'],
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
     // PAGASA publishes both ladders (pagasa.dost.gov.ph, scale effective 23 March 2022) and they
@@ -141,20 +141,29 @@ const TC_SCALES = [
             {lo:48, kmh:89,  name:'Severe Tropical Storm'},
             {lo:64, kmh:118, name:'Typhoon'},
             {lo:100,kmh:185, name:'Super Typhoon'} ] },
-  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region', unit:'kt',
-    // BOM publishes its categories in km/h. Those figures are not carried here because they were
-    // not confirmed from a BOM page; the knot bounds are the ones this table has always used.
-    bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
-            {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
-            {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
-  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific', unit:'kt',
+  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region', unit:'kmh', pub:['kmh'],
+    // BOM defines its categories on the MAXIMUM MEAN wind in km/h: Cat 1 63-88, Cat 2 89-117,
+    // Cat 3 118-159, Cat 4 160-199, Cat 5 above 200 (bom.gov.au, Tropical cyclone categories).
+    // The same page prints a "typical strongest gust" beside each, which is a different quantity
+    // and is not used here. The knot figures are exact conversions, carried for display only,
+    // and replace an earlier set that mixed floors with ceilings: 118 km/h had been stored as
+    // 64 kt, which is 118.5 km/h, so BOM's own Category 3 floor came back as Category 2.
+    // BOM's classes are integer km/h bands with a gap at each join (88 to 89, 117 to 118,
+    // 159 to 160, 199 to 200), so the floor is what is stored and the comparison is >=.
+    bands:[ {lo:0,        kmh:0,   name:'below Category 1'},
+            {lo:34.01728, kmh:63,  name:'Category 1'},
+            {lo:48.05616, kmh:89,  name:'Category 2'},
+            {lo:63.71490, kmh:118, name:'Category 3 (severe)'},
+            {lo:86.39309, kmh:160, name:'Category 4 (severe)'},
+            {lo:107.99136,kmh:200, name:'Category 5 (severe)'} ] },
+  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific', unit:'kt', pub:['kt','kmh'],
     // Knots from IBTrACS v04r01 Technical Details (LW <22, TD 22-33, TS 34-47, STS 48-63,
     // T 64-80, ST 81-99, SuperT >=100 kt); km/h as HKO prints them at hko.gov.hk.
     bands:[ {lo:0,  kmh:0,   name:'Low'},                   {lo:22, kmh:41,  name:'Tropical Depression'},
             {lo:34, kmh:63,  name:'Tropical Storm'},        {lo:48, kmh:88,  name:'Severe Tropical Storm'},
             {lo:64, kmh:118, name:'Typhoon'},               {lo:81, kmh:150, name:'Severe Typhoon'},
             {lo:100,kmh:185, name:'Super Typhoon'} ] },
-  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific', unit:'ms',
+  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific', unit:'ms', pub:['ms'],
     // Chinese National Standard, in force since 15 June 2006. IBTrACS v04r01 Technical Details
     // states the bounds in m/s, and m/s is what CMA is compared in. The knot figures are the
     // exact conversions, carried for display only.
@@ -165,14 +174,14 @@ const TC_SCALES = [
             {lo:63.564, ms:32.7, name:'Typhoon'},
             {lo:80.670, ms:41.5, name:'Severe Typhoon'},
             {lo:99.125, ms:51.0, name:'Super Typhoon'} ] },
-  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific', unit:'ms',
+  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific', unit:'ms', pub:['ms'],
     // IBTrACS v04r01 Technical Details: TD 14-17, TS 17-25, STS 25-33, TY >=33 m/s.
     bands:[ {lo:0,      ms:0,  name:'Low'},
             {lo:27.214, ms:14, name:'Tropical Depression'},
             {lo:33.045, ms:17, name:'Tropical Storm'},
             {lo:48.596, ms:25, name:'Severe Tropical Storm'},
             {lo:64.147, ms:33, name:'Typhoon'} ] },
-  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean', unit:'kt',
+  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean', unit:'kt', pub:['kt'],
     // IBTrACS v04r01 Technical Details, stated directly in knots.
     bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
             {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},
@@ -184,16 +193,25 @@ const TC_SCALES = [
    disagree at a boundary (PAGASA prints the Typhoon floor as both 64 kt and 118 km/h, and
    118 km/h is 63.7 kt) the answer follows the user's unit rather than silently preferring one.
    Agencies that publish in one unit only are always compared in that unit. */
-const BOUND_KEY = {kt:'lo', kmh:'kmh', ms:'ms'};
+const BOUND_KEY  = {kt:'lo', kmh:'kmh', ms:'ms'};
+const BOUND_PREC = {kt:0, kmh:0, ms:1};             // decimals each agency reports its ladder in
 function classify(vKt, scale, unit){
   const bands = scale.bands || scale;               // accepts a bare band array for old callers
   if(!isNum(vKt) || vKt < 0) return null;           // a negative wind is not on any scale
-  let key = BOUND_KEY[unit];
-  if(!key || !bands.every(b=>isNum(b[key]))) key = BOUND_KEY[scale.unit] || 'lo';
-  const u = key==='lo' ? 'kt' : (key==='kmh' ? 'kmh' : 'ms');
-  const x = speedTo(vKt, 'kt', u);
+  /* Only a unit the agency actually publishes counts as a ladder. Every scale also carries knot
+     values so the tables have something to print, but for BOM, CMA and KMA those are this app's
+     conversions, not agency numbers, and comparing against them is not the same question. */
+  const pub = scale.pub || ['kt'];
+  const u   = pub.indexOf(unit) >= 0 ? unit : (scale.unit || 'kt');
+  const key = BOUND_KEY[u];
+  let x = speedTo(vKt, 'kt', u);
+  /* Where the wind had to be converted into the agency's unit, round it to the precision that
+     agency reports in first. A ladder only means anything at the precision it is published at:
+     BOM's Category 1 floor of 63 km/h is 34 kt to the knot, and 34 kt converts to 62.97, which
+     would otherwise fall below BOM's own gale threshold. */
+  if(u !== unit){ const p = Math.pow(10, BOUND_PREC[u]); x = Math.round(x*p)/p; }
   let out = null;
-  for(const b of bands) if(x >= b[key] - 1e-9) out = b;
+  for(const b of bands) if(isNum(b[key]) && x >= b[key] - 1e-9) out = b;
   return out;
 }
 /* Convert an input wind of a given averaging period into each scale's

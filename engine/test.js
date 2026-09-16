@@ -421,6 +421,35 @@ ok('ISO 7243 differs from the BOM approximation',
    ===================================================================== */
 console.log('\n== REGRESSIONS ==');
 
+/* WMO/TD-No. 1555 Table 1.1 in full, transcribed from the document itself
+   (systemsengineeringaustralia.com.au/download/WMO_TC_Wind_Averaging_27_Aug_2010.pdf).
+   Order within each array is at-sea, off-sea, off-land, in-land. */
+{
+  const WMO = {
+    3600:{3:[1.30,1.45,1.60,1.75],60:[1.11,1.17,1.22,1.28],120:[1.07,1.11,1.15,1.19],180:[1.06,1.09,1.12,1.15],600:[1.03,1.05,1.06,1.08]},
+    600 :{3:[1.23,1.38,1.52,1.66],60:[1.05,1.11,1.16,1.21],120:[1.02,1.05,1.09,1.12],180:[1.00,1.03,1.06,1.09],600:[1.00,1.00,1.00,1.00]},
+    180 :{3:[1.17,1.31,1.44,1.58],60:[1.00,1.05,1.10,1.15],120:[1.00,1.00,1.04,1.07],180:[1.00,1.00,1.00,1.00]},
+    120 :{3:[1.15,1.28,1.42,1.55],60:[1.00,1.03,1.08,1.13],120:[1.00,1.00,1.00,1.00]},
+    60  :{3:[1.11,1.23,1.36,1.49],60:[1.00,1.00,1.00,1.00]}
+  };
+  let bad = [], n = 0;
+  for(const T0 in WMO) for(const tau in WMO[T0]) M.EXPOSURES.forEach((e,i)=>{
+    n++;
+    if(Math.abs(M.gustFactor(+tau, +T0, e) - WMO[T0][tau][i]) > 1e-9)
+      bad.push(T0+'/'+tau+'/'+e);
+  });
+  eq('all '+n+' entries of WMO Table 1.1 match the published table', bad.join(',') || 'none', 'none');
+  eq('gust shorter than the mean period is refused', isFinite(M.gustFactor(3600, 600, 'at-sea'))?1:0, 0);
+}
+
+// NWS publishes one worked heat-index example on weather.gov/safety/heat-index
+ok('NWS worked example: 96 F at 65% RH gives 121 F', M.heatIndexF(96,65).hi, 121, 0.1, 'F');
+// and the adjustment gates on wpc.ncep.noaa.gov/html/heatindex_equation.shtml
+eq('dry adjustment applies at 112 F',      M.heatIndexF(112,5).branch, 'rothfusz+dry adj');
+eq('and not at 113 F, where the root goes negative', M.heatIndexF(113,5).branch, 'rothfusz');
+eq('humid adjustment applies at 87 F',     M.heatIndexF(87,90).branch, 'rothfusz+humid adj');
+eq('and not at 88 F',                      M.heatIndexF(88,90).branch, 'rothfusz');
+
 // UTCI saturation vapour pressure: log(T), not log1p(T)
 ok('utciEs(30) is near the Magnus value', M.utciEs(30), 42.47, 0.05, 'hPa');
 ok('23C/100%RH UTCI is 25.93, not the 26.02 the log1p form gave', M.utci(23,23,1,100), 25.933076628, 1e-8, 'C');
@@ -433,15 +462,29 @@ eq('wind below 0.5 m/s is flagged', M.utciRangeIssues(30,30,0.2,50).length, 1);
 eq('wind above 30.3 m/s is flagged', M.utciRangeIssues(30,30,35,50).length, 1);
 
 // TC scales: every published threshold, in every unit its agency publishes, lands in its own band
-{
+{ // only the units each agency actually publishes; the other columns are this app's conversions
+  const KEY = {kt:'lo', kmh:'kmh', ms:'ms'};
   let bad = [];
-  for(const s of M.TC_SCALES) for(const b of s.bands)
-    for(const [unit,key] of [['kt','lo'],['kmh','kmh'],['ms','ms']]){
-      if(b[key] === undefined) continue;
-      const got = M.classify(M.speedTo(b[key], unit, 'kt'), s, unit);
-      if(!got || got.name !== b.name) bad.push(s.id+' '+b[key]+unit);
-    }
-  eq('every published TC threshold classifies into its own band', bad.join(',') || 'none', 'none');
+  for(const s of M.TC_SCALES) for(const b of s.bands) for(const unit of (s.pub || ['kt'])){
+    const k = KEY[unit];
+    if(b[k] === undefined){ bad.push(s.id+' has no '+unit+' bound'); continue; }
+    const got = M.classify(M.speedTo(b[k], unit, 'kt'), s, unit);
+    if(!got || got.name !== b.name) bad.push(s.id+' '+b[k]+unit+' -> '+(got?got.name:'null'));
+  }
+  eq('every published TC threshold classifies into its own band', bad.join('; ') || 'none', 'none');
+}
+{ const b = M.TC_SCALES.find(s=>s.id==='bom');
+  // BOM publishes km/h only. Its Cat 1 floor of 63 km/h is 34 kt to the knot, and 34 kt is
+  // 62.97 km/h, so a knot input must be rounded to BOM's reporting precision before comparing.
+  eq('BOM 63 km/h is Category 1',   M.classify(M.speedTo(63,'kmh','kt'), b, 'kmh').name, 'Category 1');
+  eq('BOM 118 km/h is Category 3',  M.classify(M.speedTo(118,'kmh','kt'), b, 'kmh').name, 'Category 3 (severe)');
+  eq('BOM 160 km/h is Category 4',  M.classify(M.speedTo(160,'kmh','kt'), b, 'kmh').name, 'Category 4 (severe)');
+  eq('BOM 200 km/h is Category 5',  M.classify(M.speedTo(200,'kmh','kt'), b, 'kmh').name, 'Category 5 (severe)');
+  eq('BOM 62 km/h is below Category 1', M.classify(M.speedTo(62,'kmh','kt'), b, 'kmh').name, 'below Category 1');
+  eq('BOM 34 kt is Category 1, not 62.97 km/h', M.classify(34, b, 'kt').name, 'Category 1');
+  eq('BOM 33 kt is still below Category 1',     M.classify(33, b, 'kt').name, 'below Category 1');
+  eq('BOM gust figures are not used: 125 km/h is Cat 3, not Cat 1',
+     M.classify(M.speedTo(125,'kmh','kt'), b, 'kmh').name, 'Category 3 (severe)');
 }
 { const p = M.TC_SCALES.find(s=>s.id==='pagasa');
   eq('PAGASA 118 km/h is a Typhoon',        M.classify(M.speedTo(118,'kmh','kt'), p, 'kmh').name, 'Typhoon');
