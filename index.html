@@ -115,6 +115,7 @@ body{
 .locbtn[disabled]{opacity:.45; cursor:progress}
 .locnote{margin:.55rem 0 0; font-size:11.5px; line-height:1.45; color:var(--ink-2)}
 .locnote:empty{display:none}
+#loc-moist .locate{margin:0 0 1rem}
 .locnote b{color:var(--ink)}
 .dayoff{font-size:10px; color:var(--ink-3); font-weight:400}
 .conv{color:var(--ink-3); font-weight:400}
@@ -360,6 +361,7 @@ tr:last-child td{border-bottom:0}
            exposure. None of this replaces an official heat warning from your national meteorological
            service, or medical or occupational safety advice.</p>
       </div>
+      <div id="loc-moist"></div>
       <div class="grid" id="g-moist"></div>
     </section>
 
@@ -3489,6 +3491,60 @@ card('ref', {
   },
   src:'The calculation engine ships with 298 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
+
+/* =================================================================
+   MODULE-LEVEL LOCATION
+   ================================================================= */
+/* One control that fills the position and the clock for every card in a module that asks for
+   them, rather than a button per card. It writes into the inputs and dispatches a real input
+   event, so each card recomputes through its own listener and nothing here needs to know what
+   any card does. Fields stay editable: a surveyed station position typed afterwards wins.
+   Cards are matched by the suffix of their namespaced id, so a card added later that has a
+   lat, lon, mon, day or hr field is picked up with no change here. */
+function moduleLocate(mod, label){
+  const host = document.getElementById('loc-'+mod);
+  if(!host) return;
+  host.innerHTML = '<div class="locate"><button type="button" class="locbtn" id="ml-'+mod+'">'
+                 + label + '</button><p class="locnote" id="mln-'+mod+'"></p></div>';
+  const btn  = document.getElementById('ml-'+mod);
+  const note = document.getElementById('mln-'+mod);
+  const setAll = (suffix, val) => {
+    const hit = document.querySelectorAll('#g-'+mod+' [id$="_'+suffix+'"]');
+    hit.forEach(e=>{ e.value = val; e.dispatchEvent(new Event('input', {bubbles:true})); });
+    return hit.length;
+  };
+  btn.addEventListener('click', ()=>{
+    /* The cards in this module work in UTC, so the clock is read in UTC. No permission and no
+       network is needed for it, so it is set first and survives a refused or failed fix. */
+    const now = new Date();
+    const n = setAll('mon', String(now.getUTCMonth()+1))
+            + setAll('day', now.getUTCDate())
+            + setAll('hr',  Math.round((now.getUTCHours() + now.getUTCMinutes()/60)*2)/2);
+    const clock = 'Date and hour set from your device clock, in UTC, which is what these cards want. ';
+    const fail = why => { note.innerHTML = clock + why; };
+    note.innerHTML = 'Asking your device for a location. Answer the permission prompt if your browser shows one.';
+    if(!navigator.geolocation)
+      return fail('This browser cannot read your location, so type the coordinates in yourself.');
+    try{
+      navigator.geolocation.getCurrentPosition(
+        p => {
+          const k = setAll('lat', p.coords.latitude.toFixed(2)) + setAll('lon', p.coords.longitude.toFixed(2));
+          const a = p.coords.accuracy;
+          const acc = (typeof a === 'number' && isFinite(a)) ? Math.round(a) : null;
+          note.innerHTML = clock + 'Coordinates set from your device'
+            + (acc != null ? ', fix good to about \u00b1' + acc + ' m' : '')
+            + '. Read to a hundredth of a degree, about 1 km, which is finer than anything these '
+            + 'calculators can tell apart. Every box stays editable, so a surveyed station position '
+            + 'typed over the top wins.';
+        },
+        e => fail(e && e.code === 1
+          ? 'Your device refused to share its location, so the coordinates below are unchanged. Type your own in.'
+          : 'The location could not be read, so type the coordinates in yourself.'),
+        {enableHighAccuracy:true, timeout:8000});
+    }catch(e){ fail('This browser refused the location request outright. Type the coordinates in yourself.'); }
+  });
+}
+moduleLocate('moist', 'Use phone GPS and the time now');
 
 /* =================================================================
    SHELL
