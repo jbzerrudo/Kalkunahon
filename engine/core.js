@@ -111,73 +111,107 @@ function gustFactor(tau, T0, exposure){
 
 /* --- 1.5 TC intensity scales. Each carries its NATIVE averaging period. --- */
 const TC_SCALES = [
-  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific',
-    bands:[ {lo:0,   name:'Tropical Depression'}, {lo:34, name:'Tropical Storm'},
-            {lo:64,  name:'Category 1'},          {lo:83, name:'Category 2'},
-            {lo:96,  name:'Category 3 (major)'},  {lo:113,name:'Category 4 (major)'},
-            {lo:137, name:'Category 5 (major)'} ] },
-  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific',
-    bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
-            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
-            {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'Philippine AoR',
+  /* Bounds are stored in every unit the agency itself publishes, and classification uses the
+     ladder for the unit the user is working in (see classify below). Storing only integer-knot
+     ceilings of a metric ladder, as this table did before, put every one of CMA's and KMA's own
+     published thresholds one band low: CMA's 10.8 m/s is 20.995 kt, which a ">= 21 kt" test
+     reads as weaker than a depression. */
+  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific', unit:'kt',
+    // kt and km/h both published at nhc.noaa.gov/aboutsshws.php (119/154/178/209/252 km/h).
+    bands:[ {lo:0,   kmh:0,   name:'Tropical Depression'}, {lo:34,  kmh:63,  name:'Tropical Storm'},
+            {lo:64,  kmh:119, name:'Category 1'},          {lo:83,  kmh:154, name:'Category 2'},
+            {lo:96,  kmh:178, name:'Category 3 (major)'},  {lo:113, kmh:209, name:'Category 4 (major)'},
+            {lo:137, kmh:252, name:'Category 5 (major)'} ] },
+  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific', unit:'kt',
+    // JMA publishes m/s and knots side by side (jma.go.jp: 33 m/s = 64 kt, 44 = 85, 54 = 105).
+    bands:[ {lo:0,  ms:0,    name:'Tropical Depression'},   {lo:34, ms:17.2, name:'Tropical Storm'},
+            {lo:48, ms:24.5, name:'Severe Tropical Storm'}, {lo:64, ms:32.7, name:'Typhoon'},
+            {lo:85, ms:44,   name:'Typhoon (Very Strong)'}, {lo:105,ms:54,   name:'Typhoon (Violent)'} ] },
+  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR', unit:'kt',
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
-    // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
-    // and are not strict conversions of the knot bounds (22 kt = 40.7, published as 39).
+    // PAGASA publishes both ladders (pagasa.dost.gov.ph, scale effective 23 March 2022) and they
+    // are not strict conversions of each other: the Typhoon floor is printed as 64 kt and as
+    // 118 km/h, and 118 km/h is 63.7 kt. The STS floor is printed as 87 km/h while Tropical Storm
+    // is printed as ending at 88; 89 is used here because it is what the 48 kt floor converts to
+    // and it leaves no overlap.
     bands:[ {lo:0,  kmh:0,   name:'Low Pressure Area'},
             {lo:22, kmh:39,  name:'Tropical Depression'},
             {lo:34, kmh:62,  name:'Tropical Storm'},
             {lo:48, kmh:89,  name:'Severe Tropical Storm'},
             {lo:64, kmh:118, name:'Typhoon'},
             {lo:100,kmh:185, name:'Super Typhoon'} ] },
-  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region',
+  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region', unit:'kt',
+    // BOM publishes its categories in km/h. Those figures are not carried here because they were
+    // not confirmed from a BOM page; the knot bounds are the ones this table has always used.
     bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
             {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
             {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
-  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific',
-    // IBTrACS v04r01 HKO_CAT, stated directly in knots.
-    bands:[ {lo:0,  name:'Low'},                   {lo:22, name:'Tropical Depression'},
-            {lo:34, name:'Tropical Storm'},        {lo:48, name:'Severe Tropical Storm'},
-            {lo:64, name:'Typhoon'},               {lo:81, name:'Severe Typhoon'},
-            {lo:100,name:'Super Typhoon'} ] },
-  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific',
-    // Chinese National Standard, in force since 15 June 2006. Authoritative bounds are in
-    // m/s: 10.8 / 17.2 / 24.5 / 32.7 / 41.5 / 51.0. Knots below are the integer thresholds
-    // that reproduce those bounds (1 kt = 0.514444 m/s).
-    bands:[ {lo:0,  name:'Weaker than Tropical Depression'},
-            {lo:21, name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
-            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
-            {lo:81, name:'Severe Typhoon'},        {lo:100,name:'Super Typhoon'} ] },
-  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific',
-    // IBTrACS v04r01 KMA_CAT. Authoritative bounds are in m/s: 14 / 17 / 25 / 33.
-    // KMA's metric bounds differ from the JMA/CMA set, so the knot thresholds differ too.
-    bands:[ {lo:0,  name:'Low'},                   {lo:28, name:'Tropical Depression'},
-            {lo:34, name:'Tropical Storm'},        {lo:49, name:'Severe Tropical Storm'},
-            {lo:65, name:'Typhoon'} ] },
-  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean',
+  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific', unit:'kt',
+    // Knots from IBTrACS v04r01 Technical Details (LW <22, TD 22-33, TS 34-47, STS 48-63,
+    // T 64-80, ST 81-99, SuperT >=100 kt); km/h as HKO prints them at hko.gov.hk.
+    bands:[ {lo:0,  kmh:0,   name:'Low'},                   {lo:22, kmh:41,  name:'Tropical Depression'},
+            {lo:34, kmh:63,  name:'Tropical Storm'},        {lo:48, kmh:88,  name:'Severe Tropical Storm'},
+            {lo:64, kmh:118, name:'Typhoon'},               {lo:81, kmh:150, name:'Severe Typhoon'},
+            {lo:100,kmh:185, name:'Super Typhoon'} ] },
+  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific', unit:'ms',
+    // Chinese National Standard, in force since 15 June 2006. IBTrACS v04r01 Technical Details
+    // states the bounds in m/s, and m/s is what CMA is compared in. The knot figures are the
+    // exact conversions, carried for display only.
+    bands:[ {lo:0,      ms:0,    name:'Weaker than Tropical Depression'},
+            {lo:20.995, ms:10.8, name:'Tropical Depression'},
+            {lo:33.437, ms:17.2, name:'Tropical Storm'},
+            {lo:47.624, ms:24.5, name:'Severe Tropical Storm'},
+            {lo:63.564, ms:32.7, name:'Typhoon'},
+            {lo:80.670, ms:41.5, name:'Severe Typhoon'},
+            {lo:99.125, ms:51.0, name:'Super Typhoon'} ] },
+  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific', unit:'ms',
+    // IBTrACS v04r01 Technical Details: TD 14-17, TS 17-25, STS 25-33, TY >=33 m/s.
+    bands:[ {lo:0,      ms:0,  name:'Low'},
+            {lo:27.214, ms:14, name:'Tropical Depression'},
+            {lo:33.045, ms:17, name:'Tropical Storm'},
+            {lo:48.596, ms:25, name:'Severe Tropical Storm'},
+            {lo:64.147, ms:33, name:'Typhoon'} ] },
+  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean', unit:'kt',
+    // IBTrACS v04r01 Technical Details, stated directly in knots.
     bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
             {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},
             {lo:48, name:'Severe Cyclonic Storm'}, {lo:64, name:'Very Severe Cyclonic Storm'},
             {lo:90, name:'Extremely Severe Cyclonic Storm'}, {lo:120,name:'Super Cyclonic Storm'} ] }
 ];
-function classify(vKt, bands){
-  let out = bands[0];
-  for(const b of bands) if(vKt >= b.lo) out = b;
+/* Compare in the unit the user is working in when the agency publishes a ladder in it, because
+   that is the table the agency itself prints in that unit. Where an agency's own two ladders
+   disagree at a boundary (PAGASA prints the Typhoon floor as both 64 kt and 118 km/h, and
+   118 km/h is 63.7 kt) the answer follows the user's unit rather than silently preferring one.
+   Agencies that publish in one unit only are always compared in that unit. */
+const BOUND_KEY = {kt:'lo', kmh:'kmh', ms:'ms'};
+function classify(vKt, scale, unit){
+  const bands = scale.bands || scale;               // accepts a bare band array for old callers
+  if(!isNum(vKt) || vKt < 0) return null;           // a negative wind is not on any scale
+  let key = BOUND_KEY[unit];
+  if(!key || !bands.every(b=>isNum(b[key]))) key = BOUND_KEY[scale.unit] || 'lo';
+  const u = key==='lo' ? 'kt' : (key==='kmh' ? 'kmh' : 'ms');
+  const x = speedTo(vKt, 'kt', u);
+  let out = null;
+  for(const b of bands) if(x >= b[key] - 1e-9) out = b;
   return out;
 }
 /* Convert an input wind of a given averaging period into each scale's
    native period using Table 1.2, then classify. */
-function tcClassifyAll(vKt, inputAvg, exposure){
+function tcClassifyAll(vKt, inputAvg, exposure, unit){
   const K = K_VMAX[exposure];
   return TC_SCALES.map(s=>{
     let v = vKt, note = null;
     if(inputAvg !== s.avg){
       if(inputAvg===60  && s.avg===600){ v = vKt*K; note='x'+K.toFixed(2); }
       else if(inputAvg===600 && s.avg===60){ v = vKt/K; note='/'+K.toFixed(2); }
-      else if(inputAvg===180 || s.avg===180){ note='no WMO factor'; }
+      /* WMO Table 1.2 covers 1-minute and 10-minute only. Everything else, which is CMA's
+         2-minute and IMD's 3-minute, passes through unconverted and must say so. An earlier
+         version tested for 180 alone, so CMA's 120 fell through with note = null and the card
+         rendered that as the chip "native". */
+      else { note='no WMO factor'; }
     }
-    return {scale:s, v:v, band:classify(v,s.bands), note:note};
+    return {scale:s, v:v, band:classify(v, s, unit), note:note};
   });
 }
 
@@ -280,6 +314,18 @@ function wetBulbStull(t, rh){
        - 4.686035;
 }
 // Exact: bisect the psychrometric equation e = es(Tw) - A p (1+0.00115 Tw)(T-Tw)
+/* Inverse of wetBulbPsychro: the relative humidity whose psychrometric wet bulb reads tw at
+   temperature t and pressure p. wetBulbPsychro is monotone in rh, so bisection is enough. */
+function rhFromWetBulb(t, tw, p){
+  if(!isNum(t) || !isNum(tw) || tw > t) return NaN;
+  p = isNum(p) ? p : 1013.25;
+  let lo = 0, hi = 100;
+  for(let i = 0; i < 80; i++){
+    const mid = 0.5*(lo + hi);
+    if(wetBulbPsychro(t, mid, p) < tw) lo = mid; else hi = mid;
+  }
+  return 0.5*(lo + hi);
+}
 function wetBulbPsychro(t, rh, p){
   const e = (rh/100)*esWater(t);
   // One branch across the whole bracket, so f stays monotonic and the root is
@@ -730,7 +776,7 @@ function utciEs(t){
   const g = [-2836.5744, -6028.076559, 19.54263612, -0.02737830188,
              0.000016261698, 7.0229056e-10, -1.8680009e-13];
   const tk = t + 273.15;
-  let es = 2.7150305 * Math.log1p(tk);
+  let es = 2.7150305 * Math.log(tk);   // Hardy (1998) / ITS-90. log1p here is a 0.9% error in es.
   for(let i = 0; i < g.length; i++) es += g[i] * Math.pow(tk, i - 2);
   return Math.exp(es) * 0.01;
 }
@@ -799,12 +845,23 @@ function utciCategory(u){
   return UTCI_BANDS[UTCI_BANDS.length-1].name;
 }
 /* Published validity domain. Returns the list of breaches, empty if in range. */
+/* Published domain, Broede et al. (2012), "Usage guidelines":
+   -50 <= Ta <= +50 C, -30 <= Tr - Ta <= +70 C, 0.5 <= va <= 30.3 m/s, 5% <= rH <= 100%
+   with pa < 50 hPa. The vapour-pressure limit is the one that bites in the tropics: it is
+   passed a little above 33 C at saturation, and beyond it the polynomial does not merely lose
+   accuracy, it inverts. At 50 C and 100% RH the reference implementation itself returns
+   -352 C, which its own band table calls extreme cold stress. */
 function utciRangeIssues(ta, tmrt, v10, rh){
   const out = [];
-  if(ta < -50 || ta > 50)               out.push('air temperature outside -50 to +50 &deg;C');
+  if(ta < -50 || ta > 50)               out.push('air temperature outside &minus;50 to +50 &deg;C');
   if(tmrt-ta < -30 || tmrt-ta > 70)     out.push('T<sub>mrt</sub> &minus; T<sub>a</sub> outside &minus;30 to +70 K');
-  if(v10 > 17)                          out.push('wind above 17 m/s, the limit most implementations enforce');
+  if(v10 < 0.5)                         out.push('wind below 0.5 m/s, the published lower limit');
+  else if(v10 > 30.3)                   out.push('wind above 30.3 m/s, the published upper limit');
+  else if(v10 > 17)                     out.push('wind above 17 m/s, the limit the reference implementations enforce');
   if(rh < 5 || rh > 100)                out.push('relative humidity outside 5 to 100%');
+  const pa = utciEs(ta) * (rh/100);     // hPa
+  if(isNum(pa) && pa >= 50)
+    out.push('water vapour pressure ' + pa.toFixed(1) + ' hPa, above the published 50 hPa (5 kPa) limit, where the polynomial inverts');
   return out;
 }
 
@@ -1083,9 +1140,13 @@ function crossTime(t0, t1, h, lat, lon){
   return 0.5*(a + b);
 }
 
-function sunTimes(dateUTC, latDeg, lonDeg){
+/* tzHours is optional. Given, the 24-hour window is centred on midday of the caller's own
+   civil day; left out, it falls back to local solar noon from longitude. The two agree almost
+   everywhere, but in a zone far from its standard meridian they do not: Apia (172 W, UTC+13)
+   asked for 21 June came back with 22 June's rise and set. */
+function sunTimes(dateUTC, latDeg, lonDeg, tzHours){
   const day = Date.UTC(dateUTC.getUTCFullYear(), dateUTC.getUTCMonth(), dateUTC.getUTCDate());
-  const noonGuess = day + (12 - lonDeg/15)*3600e3;      // local solar noon, roughly
+  const noonGuess = day + (12 - (isNum(tzHours) ? tzHours : lonDeg/15))*3600e3;
   const step = 5*60e3;                                   // 5 minute scan
   const t0 = noonGuess - 12*3600e3, t1 = noonGuess + 12*3600e3;
 
@@ -1180,7 +1241,15 @@ function qnhNWS(ps, hM){
 }
 
 /* --- 3.6 Pressure altitude & density altitude --- */
-function pressureAltitude(p){ return (T0K/LAPSE)*(1 - Math.pow(p/P0, 1/NEXP)); }  // m
+/* Below the tropopause this inverts the ISA lapse relation. Above it the atmosphere is
+   isothermal, so extrapolating the lapse relation is not the inverse of isa(H): it put
+   100 hPa at 15797 m instead of 16180 m, and 50 hPa a full 1253 m low. */
+const P_TP = P0*Math.pow(T_TP/T0K, NEXP);              // 226.3206 hPa at 11000 gpm
+function pressureAltitude(p){
+  if(!isNum(p) || p <= 0) return NaN;
+  if(p >= P_TP) return (T0K/LAPSE)*(1 - Math.pow(p/P0, 1/NEXP));
+  return H_TP + (R_ISA*T_TP/G0)*Math.log(P_TP/p);
+}
 function densityAltitude(p, tC, td){
   const e   = isNum(td) ? esWater(td) : 0;
   const tK  = tC+273.15;
@@ -1223,6 +1292,7 @@ function dryLapse(){ return 1000*G0/CPD; }   // K/km
 /* Stull eq. 4.37b saturated adiabatic lapse rate */
 function moistLapse(tK, p){
   const es = esWater(tK-273.15);
+  if(!(p > es)) return NaN;        // es >= p gives a negative saturation mixing ratio
   const rs = EPS*es/(p-es);
   const a = 8711, b = 1.35e7, Gd = 9.8;
   return Gd*(1 + a*rs/tK)/(1 + b*rs/(tK*tK));   // K/km
@@ -1231,7 +1301,8 @@ function moistLapse(tK, p){
 /* Moist adiabat in pressure coordinates, RK4. dT/dp per MetPy/Bakhshaii. */
 function moistLapseDTDP(tK, p){
   const es = esWater(tK-273.15);
-  const rs = EPS*es/Math.max(p-es, 1e-6);
+  if(!(p > es)) return NaN;        // same guard as moistLapse rather than a 1e-6 floor
+  const rs = EPS*es/(p-es);
   const Lv = 3337118.5 - 3642.8583*tK + 2.1263947*tK*tK;   // Smithsonian poly
   return (RD*tK + Lv*rs)/(p*(CPD + Lv*Lv*rs*EPS/(RD*tK*tK)));
 }
@@ -1339,7 +1410,7 @@ const API = {
   uvFromSpeedDir,speedDirFromUV,Z0,logProfile,powerLaw,windPowerDensity,
   esWater,esIce,esBolton,dewpointFromRH,rhFromDewpoint,frostpointFromRHi,
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
-  absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
+  absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,rhFromWetBulb,iceBulbPsychro,heatIndexF,windChillC,
   humidex,apparentTempBOM,wbgtSimple,
   LJ,ljSolarPosition,ljSolarParameters,wbgtLiljegren,hittekracht,
   ACGIH_WBGT,acgihAllocation,

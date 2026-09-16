@@ -13,7 +13,7 @@ identifiers:
     description: Concept DOI, always resolves to the latest version
   - type: doi
     value: 10.5281/zenodo.22070324
-    description: DOI for version 1.0.0
+    description: DOI for the first release, version 1.0.0
 repository-code: "https://github.com/jbzerrudo/Kalkunahon"
 url: "https://jbzerrudo.github.io/Kalkunahon/"
 abstract: >-
@@ -21,7 +21,9 @@ abstract: >-
   derived quantities: wind speed units and Beaufort force, WMO tropical cyclone
   wind averaging period conversion, gust factors, TC intensity scale comparison,
   pressure-wind relationships, humidity and comfort indices, standard atmosphere
-  and altimetry, and parcel thermodynamics and stability indices. Each result
+  and altimetry, parcel thermodynamics and stability indices, outdoor WBGT by the Liljegren model with
+  the KNMI hittekracht scale and ACGIH work-rest limits, and sunrise, sunset, twilight and
+  day length. Each result
   carries the published source it derives from.
 keywords:
   - meteorology
@@ -29,8 +31,10 @@ keywords:
   - psychrometrics
   - standard atmosphere
   - atmospheric thermodynamics
+  - heat stress
+  - solar position
   - education
 license: PolyForm-Noncommercial-1.0.0
-version: 1.3.0
-date-released: "2026-09-03"
+version: 1.4.0
+date-released: "2026-10-01"
 doi: 10.5281/zenodo.22070323

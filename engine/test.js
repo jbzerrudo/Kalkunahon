@@ -220,6 +220,118 @@ ok('SWEAT full example',                  M.sweat(15,55,30,50,180,260),
 ok('SWEAT clamps negative Td850',         M.sweat(-5,50,20,30,180,260), M.sweat(0,50,20,30,180,260), 1e-12);
 ok('BRN = CAPE/(0.5 U^2)',                M.bulkRichardson(2000,20), 10, 1e-12);
 
+console.log('\n== LILJEGREN OUTDOOR WBGT / KNMI HITTEKRACHT ==');
+{
+  // De Bilt 52.10N 5.18E, 21 Jun 2026 12:00 UTC. Max solar elevation at this
+  // latitude on the solstice is 90 - 52.10 + 23.44 = 61.34 deg, reached at
+  // true solar noon (about 11:39 UTC at 5.18E), so 12:00 UTC sits just below it.
+  const d = new Date(Date.UTC(2026,5,21,12,0,0));
+  const sp = M.ljSolarPosition(d, 52.10, 5.18);
+  ok('solar elevation, De Bilt solstice noon',  sp.elev, 61.2, 0.3, 'deg');
+  ok('Earth-Sun distance late June',            sp.soldist, 1.0163, 0.001, 'AU');
+  ok('cza = cos(90-elev)',                      sp.cza, Math.cos((90-sp.elev)*Math.PI/180), 1e-12);
+
+  // Liljegren's psychrometric branch (rad=0) against Stull (2011), which is an
+  // independent regression fit. Stull is weakest at high T with low RH.
+  const stull=(T,RH)=>T*Math.atan(0.151977*Math.sqrt(RH+8.313659))+Math.atan(T+RH)
+    -Math.atan(RH-1.676331)+0.00391838*Math.pow(RH,1.5)*Math.atan(0.023101*RH)-4.686035;
+  for(const [T,RH,tol] of [[20,50,0.2],[25,60,0.2],[30,80,0.2],[30,50,0.6]]){
+    const r = M.wbgtLiljegren(T,RH,1013.25,1.0,800,d,52.10,5.18);
+    ok('psychrometric Tw vs Stull  T='+T+' RH='+RH, r.tpsy, stull(T,RH), tol, 'C');
+  }
+
+  // Physical behaviour
+  const day = M.wbgtLiljegren(28,55,1013.25,3,750,d,52.10,5.18);
+  ok('WBGT = 0.7 Tnwb + 0.2 Tg + 0.1 Ta', day.wbgt, 0.7*day.tnwb+0.2*day.tg+0.1*28, 1e-12);
+  eq('globe hotter than air in sunshine',  day.tg > 28, true);
+  eq('natural wet bulb above psychrometric', day.tnwb > day.tpsy, true);
+
+  const night = M.wbgtLiljegren(20,80,1013.25,2,0,new Date(Date.UTC(2026,5,21,1,0,0)),52.10,5.18);
+  eq('globe cooler than air at night',     night.tg < 20, true);
+  eq('no direct beam at night',            night.fdir === 0, true);
+
+  const calm = M.wbgtLiljegren(30,50,1013.25,1,800,d,52.10,5.18);
+  const windy = M.wbgtLiljegren(30,50,1013.25,5,800,d,52.10,5.18);
+  eq('WBGT falls as wind rises',           windy.wbgt < calm.wbgt, true);
+
+  // KNMI TR-26-04 Table 1 band edges
+  eq('hittekracht 13.9 C -> 0',  M.hittekracht(13.9), 0);
+  eq('hittekracht 14.0 C -> 1',  M.hittekracht(14.0), 1);
+  eq('hittekracht 16.0 C -> 2',  M.hittekracht(16.0), 2);
+  eq('hittekracht 20.0 C -> 4',  M.hittekracht(20.0), 4);
+  eq('hittekracht 28.0 C -> 8',  M.hittekracht(28.0), 8);
+  eq('hittekracht 31.9 C -> 9',  M.hittekracht(31.9), 9);
+  eq('hittekracht 32.0 C -> 10', M.hittekracht(32.0), 10);
+  eq('hittekracht 45.0 C -> 10', M.hittekracht(45.0), 10);
+}
+
+console.log('\n== SUNRISE, SUNSET, DAY LENGTH ==');
+{
+  /* Rounded to the nearest minute, which is what the card does from v1.4.0. Truncating, which
+     is what slice() on an ISO string does, put half of every displayed time a minute early. */
+  const hh = (d,off) => d ? (new Date(Math.round((d.getTime()+off*3600e3)/60000)*60000).toISOString().slice(11,16)) : '--:--';
+  // De Bilt on the June solstice. Published: rise 05:19, set 22:04 CEST,
+  // day length about 16 h 45 m.
+  const b = M.sunTimes(new Date(Date.UTC(2026,5,21)), 52.10, 5.18);
+  eq('De Bilt solstice sunrise 05:18 CEST', hh(b.rise.up,2),   '05:18');
+  eq('De Bilt solstice sunset 22:04 CEST',  hh(b.rise.down,2), '22:04');   // 20:03:42 UTC, rounds up
+  ok('De Bilt solstice day length',         b.dayLength, 16.75, 0.05, 'h');
+  ok('De Bilt solstice noon elevation',     b.maxElev, 61.3, 0.2, 'deg');
+  // Manila, same date and an ordinary September day. Published: 05:28/18:27
+  // and 05:44/18:06 PHT.
+  const m1 = M.sunTimes(new Date(Date.UTC(2026,5,21)), 14.60, 120.98);
+  eq('Manila solstice sunrise 05:28 PHT',   hh(m1.rise.up,8),   '05:28');
+  eq('Manila solstice sunset 18:28 PHT',    hh(m1.rise.down,8), '18:28');   // 10:27:36 UTC, rounds up
+  const m2 = M.sunTimes(new Date(Date.UTC(2026,8,4)), 14.60, 120.98);
+  eq('Manila 4 Sep sunrise 05:44 PHT',      hh(m2.rise.up,8),   '05:44');
+  eq('Manila 4 Sep sunset 18:06 PHT',       hh(m2.rise.down,8), '18:06');
+  ok('Manila 4 Sep day length near 12 h',   m2.dayLength, 12.36, 0.05, 'h');
+  // Twilight is ordered, and the equinox gives about 12 hours everywhere
+  eq('civil dawn precedes sunrise',         b.civil.up < b.rise.up, true);
+  eq('nautical precedes civil',             b.nautical.up < b.civil.up, true);
+  eq('astronomical precedes nautical',      b.astronomical.up < b.nautical.up, true);
+  const eq0 = M.sunTimes(new Date(Date.UTC(2026,2,20)), 0, 0);
+  ok('equator at equinox is ~12 h',         eq0.dayLength, 12.1, 0.1, 'h');
+  // Polar day: Tromso in June never sets
+  const tr = M.sunTimes(new Date(Date.UTC(2026,5,21)), 69.65, 18.96);
+  eq('Tromso midsummer sun never sets',     tr.rise.state, 'never below');
+}
+
+console.log('\n== ACGIH HEAT STRESS SCREENING (2026 TLVs p.242) ==');
+{
+  const A=(w,l,a)=>{const r=M.acgihAllocation(w,l,a); return r?r.label:'none';};
+  eq('acclim light 31.0 -> continuous',      A(31.0,'light',true),      'continuous');
+  eq('acclim light 31.5 -> 25-50%',          A(31.5,'light',true),      '25-50% work');
+  eq('acclim light 32.6 -> none',            A(32.6,'light',true),      'none');
+  eq('acclim moderate 28.0 -> continuous',   A(28.0,'moderate',true),   'continuous');
+  eq('acclim moderate 28.5 -> 50-75%',       A(28.5,'moderate',true),   '50-75% work');
+  eq('acclim heavy 27.5 -> 50-75%',          A(27.5,'heavy',true),      '50-75% work');
+  eq('acclim heavy 27.6 -> 25-50%',          A(27.6,'heavy',true),      '25-50% work');
+  eq('acclim very heavy 28.0 -> 25-50%',     A(28.0,'veryheavy',true),  '25-50% work');
+  eq('unacclim light 28.0 -> continuous',    A(28.0,'light',false),     'continuous');
+  eq('unacclim moderate 25.0 -> continuous', A(25.0,'moderate',false),  'continuous');
+  eq('unacclim moderate 25.1 -> 50-75%',     A(25.1,'moderate',false),  '50-75% work');
+  eq('unacclim heavy 24.0 -> 50-75%',        A(24.0,'heavy',false),     '50-75% work');
+  eq('unacclim very heavy 27.1 -> none',     A(27.1,'veryheavy',false), 'none');
+  // ACGIH gives no continuous-work entry for heavy or very heavy. Below their
+  // lowest limit the table constrains nothing, and saying "50-75% work" there
+  // would invent a restriction.
+  const U=(w,l,a)=>{const r=M.acgihAllocation(w,l,a); return r?!!r.untabulated:null;};
+  eq('heavy at 18.4 is below the tabulated range',      U(18.4,'heavy',true), true);
+  eq('very heavy at 18.4 is below the tabulated range', U(18.4,'veryheavy',true), true);
+  eq('heavy at its 27.5 limit is tabulated',            U(27.5,'heavy',true), false);
+  eq('light is never flagged untabulated',              U(10,'light',true), false);
+  eq('moderate is never flagged untabulated',           U(10,'moderate',true), false);
+  eq('unacclim heavy at 20 is below the tabulated range', U(20,'heavy',false), true);
+  eq('unacclim heavy at its 24.0 limit is tabulated',     U(24.0,'heavy',false), false);
+
+  eq('unacclimatised is never more permissive than acclimatised',
+     ['light','moderate','heavy','veryheavy'].every(l=>{
+       const t=M.ACGIH_WBGT.acclimatised[l], u=M.ACGIH_WBGT.unacclimatised[l];
+       return t.every((row,i)=>u[i][1] <= row[1]);
+     }), true);
+}
+
 console.log('\n== HEIGHT ADJUSTMENT / POWER ==');
 ok('log profile identity at z=zTarget',   M.logProfile(12,10,0.03,10), 12, 1e-12, 'm/s');
 ok('log profile 20m->10m over open land', M.logProfile(12,20,0.03,10), 10.73, 0.02, 'm/s');
@@ -228,22 +340,35 @@ ok('WPD 10 m/s at 1.225',                 M.windPowerDensity(10,1.225), 612.5, 1
 
 
 console.log('\n== UTCI, ISO 7726 AND ISO 7243 ==');
-{ // reference values from pythermalcomfort 4.4.2, unrounded
+/* These are NOT taken from pythermalcomfort's utci(). pythermalcomfort 4.4.2 computes the
+   saturation vapour pressure with np.log1p(tk) where the ITS-90 form needs log(tk), which makes
+   its es 0.9% high, and this engine carried the same line. Checking one against the other
+   certified the error: the values this block used to assert were produced by the bug.
+   So the two halves are sourced separately. The 210-coefficient polynomial comes from
+   pythermalcomfort's _utci_optimized, which is exact. The vapour pressure is checked against
+   physics: es(0 C) must be 6.112 hPa, which log(tk) gives as 6.1121 and log1p gives as 6.1731. */
+ok('utciEs(0) is the textbook 6.112 hPa', M.utciEs(0), 6.1121, 5e-4, 'hPa');
+ok('utciEs agrees with the engine Magnus esWater to 0.5%', M.utciEs(20)/M.esWater(20), 1, 5e-3);
+{ // polynomial from pythermalcomfort _utci_optimized, vapour pressure from es() above
   const REF = [
-    [30, 30, 1.0, 50, 30.348505939],
-    [35, 60, 2.0, 40, 41.041283394],
-    [20, 20, 0.5, 50, 19.869053958],
-    [-5, -5, 3.0, 80, -13.686559279],
-    [40, 70, 1.0, 30, 48.106249070],
-    [25, 25, 0.5, 50, 24.884648694],
-    [0,  0,  5.0, 60, -14.424607706]
+    [30, 30, 1.0, 50,  30.310675977],
+    [35, 60, 2.0, 40,  41.016510895],
+    [20, 20, 0.5, 50,  19.847649454],
+    [-5, -5, 3.0, 80, -13.698154934],
+    [40, 70, 1.0, 30,  48.082422730],
+    [25, 25, 0.5, 50,  24.854380261],
+    [0,  0,  5.0, 60, -14.438495967],
+    [33, 33, 2.0, 75,  36.888023753],
+    [23, 23, 1.0, 100, 25.933076628]
   ];
   let worst = 0;
   REF.forEach(r => { worst = Math.max(worst, Math.abs(M.utci(r[0],r[1],r[2],r[3]) - r[4])); });
-  ok('UTCI vs reference implementation', worst, 0, 1e-8, 'C');
-  ok('UTCI(30,30,1,50)',  M.utci(30,30,1.0,50),  30.348505939, 1e-8, 'C');
-  ok('UTCI(35,60,2,40)',  M.utci(35,60,2.0,40),  41.041283394, 1e-8, 'C');
-  ok('UTCI(-5,-5,3,80)',  M.utci(-5,-5,3.0,80), -13.686559279, 1e-8, 'C');
+  ok('UTCI vs reference polynomial', worst, 0, 1e-8, 'C');
+  ok('UTCI(30,30,1,50)',   M.utci(30,30,1.0,50),   30.310675977, 1e-8, 'C');
+  ok('UTCI(35,60,2,40)',   M.utci(35,60,2.0,40),   41.016510895, 1e-8, 'C');
+  ok('UTCI(-5,-5,3,80)',   M.utci(-5,-5,3.0,80),  -13.698154934, 1e-8, 'C');
+  ok('UTCI(23,23,1,100)',  M.utci(23,23,1.0,100),  25.933076628, 1e-8, 'C');
+  eq('and 23C/100% RH is no thermal stress, not moderate', M.utciCategory(M.utci(23,23,1,100)), 'no thermal stress');
 }
 { // in the UTCI reference environment the index tracks air temperature closely
   let worst = 0;
@@ -289,6 +414,89 @@ ok('ISO 7243 indoor weights',  M.wbgtISO(20,40,30,false), 0.7*20+0.3*40,        
 ok('ISO 7243 weights sum to 1 (outdoor)', 0.7+0.2+0.1, 1, 1e-12);
 ok('ISO 7243 differs from the BOM approximation',
    Math.abs(M.wbgtISO(25,42,33,true) - M.wbgtSimple(33,55)) > 1 ? 1:0, 1, 0);
+
+
+/* =====================================================================
+   REGRESSIONS — one per defect found in the September 2026 review
+   ===================================================================== */
+console.log('\n== REGRESSIONS ==');
+
+// UTCI saturation vapour pressure: log(T), not log1p(T)
+ok('utciEs(30) is near the Magnus value', M.utciEs(30), 42.47, 0.05, 'hPa');
+ok('23C/100%RH UTCI is 25.93, not the 26.02 the log1p form gave', M.utci(23,23,1,100), 25.933076628, 1e-8, 'C');
+
+// UTCI published domain, Broede et al. (2012) usage guidelines
+eq('pa above 50 hPa is flagged', M.utciRangeIssues(50,50,1,100).some(x=>/vapour pressure/.test(x))?1:0, 1);
+eq('and 33C at 100% RH is already past it', M.utciRangeIssues(33,33,1,100).some(x=>/vapour pressure/.test(x))?1:0, 1);
+eq('30C at 100% RH is not', M.utciRangeIssues(30,30,1,100).some(x=>/vapour pressure/.test(x))?1:0, 0);
+eq('wind below 0.5 m/s is flagged', M.utciRangeIssues(30,30,0.2,50).length, 1);
+eq('wind above 30.3 m/s is flagged', M.utciRangeIssues(30,30,35,50).length, 1);
+
+// TC scales: every published threshold, in every unit its agency publishes, lands in its own band
+{
+  let bad = [];
+  for(const s of M.TC_SCALES) for(const b of s.bands)
+    for(const [unit,key] of [['kt','lo'],['kmh','kmh'],['ms','ms']]){
+      if(b[key] === undefined) continue;
+      const got = M.classify(M.speedTo(b[key], unit, 'kt'), s, unit);
+      if(!got || got.name !== b.name) bad.push(s.id+' '+b[key]+unit);
+    }
+  eq('every published TC threshold classifies into its own band', bad.join(',') || 'none', 'none');
+}
+{ const p = M.TC_SCALES.find(s=>s.id==='pagasa');
+  eq('PAGASA 118 km/h is a Typhoon',        M.classify(M.speedTo(118,'kmh','kt'), p, 'kmh').name, 'Typhoon');
+  eq('PAGASA 39 km/h is a Tropical Depression', M.classify(M.speedTo(39,'kmh','kt'), p, 'kmh').name, 'Tropical Depression');
+  eq('PAGASA 185 km/h is a Super Typhoon',  M.classify(M.speedTo(185,'kmh','kt'), p, 'kmh').name, 'Super Typhoon');
+  eq('PAGASA 48 kt is a Severe Tropical Storm', M.classify(48, p, 'kt').name, 'Severe Tropical Storm');
+  eq('PAGASA 22 kt is a Tropical Depression',   M.classify(22, p, 'kt').name, 'Tropical Depression');
+  eq('PAGASA 21.9 kt is still a Low Pressure Area', M.classify(21.9, p, 'kt').name, 'Low Pressure Area');
+}
+{ const c = M.TC_SCALES.find(s=>s.id==='cma'), k = M.TC_SCALES.find(s=>s.id==='kma');
+  eq('CMA 32.7 m/s is a Typhoon',  M.classify(M.speedTo(32.7,'ms','kt'), c, 'ms').name, 'Typhoon');
+  eq('CMA 10.8 m/s is a Tropical Depression', M.classify(M.speedTo(10.8,'ms','kt'), c, 'ms').name, 'Tropical Depression');
+  eq('KMA 33 m/s is a Typhoon',    M.classify(M.speedTo(33,'ms','kt'), k, 'ms').name, 'Typhoon');
+  eq('KMA 14 m/s is a Tropical Depression',  M.classify(M.speedTo(14,'ms','kt'), k, 'ms').name, 'Tropical Depression');
+}
+eq('a negative wind is on no scale', M.classify(-5, M.TC_SCALES[0], 'kt'), null);
+{ const l = M.tcClassifyAll(90, 60, 'at-sea', 'kt');
+  eq('CMA 2-min says no WMO factor, not "native"', l.find(r=>r.scale.id==='cma').note, 'no WMO factor');
+  eq('IMD 3-min says no WMO factor',               l.find(r=>r.scale.id==='imd').note, 'no WMO factor');
+  eq('JMA 10-min from a 1-min input is converted', /^x/.test(l.find(r=>r.scale.id==='jma').note)?1:0, 1);
+}
+
+// Sun times
+{ const r = M.sunTimes(new Date(Date.UTC(2026,5,21)), 14.60, 120.98, 8);
+  const m = Math.round(r.dayLength*60);
+  eq('Manila solstice day length carries to 13 h 00 m', Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' m', '13 h 00 m');
+  const set = new Date(Math.round((r.rise.down.getTime()+8*3600e3)/60000)*60000).toISOString().slice(11,16);
+  eq('Manila solstice sunset rounds to 18:28, not 18:27', set, '18:28');
+}
+{ const r = M.sunTimes(new Date(Date.UTC(2026,5,21)), 52.10, 5.18, 2);
+  const set = new Date(Math.round((r.rise.down.getTime()+2*3600e3)/60000)*60000).toISOString().slice(11,16);
+  eq('De Bilt solstice sunset rounds to 22:04, not 22:03', set, '22:04');
+}
+{ const a = M.sunTimes(new Date(Date.UTC(2026,5,21)), -13.83, -171.77, 13);
+  const d = new Date(a.rise.up.getTime()+13*3600e3);
+  eq('Apia at UTC+13 gets the day it was asked for', d.toISOString().slice(0,10), '2026-06-21');
+}
+
+// ISA above the tropopause
+{ let lo = 11000, hi = 25000;
+  for(let i=0;i<80;i++){ const m=(lo+hi)/2; if(M.isa(m).p > 100) lo=m; else hi=m; }
+  ok('pressureAltitude(100 hPa) inverts isa()', M.pressureAltitude(100), (lo+hi)/2, 0.5, 'm');
+  ok('pressureAltitude(500 hPa) unchanged below the tropopause', M.pressureAltitude(500), 5574.0, 1.0, 'm');
+  eq('pressureAltitude rejects zero', isFinite(M.pressureAltitude(0))?1:0, 0);
+}
+
+// Saturated lapse rate where es exceeds the pressure
+eq('moistLapse is NaN when es >= p', isFinite(M.moistLapse(319.15, 100))?1:0, 0);
+eq('moistLapseDTDP likewise',        isFinite(M.moistLapseDTDP(319.15, 100))?1:0, 0);
+ok('and is unchanged where it is defined', M.moistLapse(283.15, 700), 4.584, 0.01, 'K/km');
+
+// The wet-bulb inverse behind the ISO 7243 humidity row
+ok('rhFromWetBulb round-trips', M.wetBulbPsychro(33, M.rhFromWetBulb(33,25,1013.25), 1013.25), 25, 1e-6, 'C');
+ok('and reads lower than treating Tnw as a dewpoint', M.rhFromWetBulb(33,25,1013.25), 51.98, 0.1, '%');
+eq('a wet bulb above air temperature is NaN', isFinite(M.rhFromWetBulb(30,33,1013.25))?1:0, 0);
 
 console.log('\n---------------------------------------------');
 console.log('  PASS', pass, '  FAIL', fail);

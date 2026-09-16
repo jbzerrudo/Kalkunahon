@@ -22,6 +22,8 @@
 <meta name="twitter:description" content="Wind and tropical cyclone conversions, moisture, pressure and altitude, thermodynamics. Runs with no internet. Every result cites its source.">
 <meta name="twitter:image" content="https://jbzerrudo.github.io/Kalkunahon/og-card-v2.png">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Kalkunahon</title>
 <!--
   Kalkunahon - offline meteorological calculator
@@ -114,6 +116,24 @@ body{
 .locnote{margin:.55rem 0 0; font-size:11.5px; line-height:1.45; color:var(--ink-2)}
 .locnote:empty{display:none}
 .locnote b{color:var(--ink)}
+.dayoff{font-size:10px; color:var(--ink-3); font-weight:400}
+.conv{color:var(--ink-3); font-weight:400}
+.ffull{grid-column:1/-1}
+input[type=text],textarea{
+  width:100%; font-family:'Archivo',system-ui,sans-serif; font-size:14px;
+  padding:.42rem .5rem; color:var(--ink); background:var(--panel-2);
+  border:1px solid var(--line); border-radius:var(--radius); resize:vertical;
+}
+input[type=text]:hover,textarea:hover{border-color:var(--ink-3)}
+.sayact{display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.9rem}
+.saypre{
+  margin:.7rem 0 0; padding:.6rem .7rem; white-space:pre-wrap; word-break:break-word;
+  font-family:'IBM Plex Mono',monospace; font-size:11.5px; line-height:1.5;
+  color:var(--ink-2); background:var(--panel-3); border-radius:var(--radius);
+  border-left:2px solid var(--line);
+}
+a.locbtn{text-decoration:none; display:inline-block}
+a.locbtn.off{opacity:.45; pointer-events:none}
 
 .app{display:grid; grid-template-columns:214px minmax(0,1fr); align-items:start; min-width:0}
 .rail{
@@ -373,6 +393,14 @@ tr:last-child td{border-bottom:0}
       <div class="grid" id="g-sun"></div>
     </section>
 
+    <section class="mod" id="m-say">
+      <div class="mod-head">
+        <h2>Comments and suggestions</h2>
+        <p>A wrong number, a threshold that has changed, a calculator you need. This page writes the
+           message; your own email app sends it. Nothing leaves your device until you press send.</p>
+      </div>
+      <div class="grid wide" id="g-say"></div>
+    </section>
     <section class="mod" id="m-ref">
       <div class="mod-head">
         <h2>Reference</h2>
@@ -565,73 +593,107 @@ function gustFactor(tau, T0, exposure){
 
 /* --- 1.5 TC intensity scales. Each carries its NATIVE averaging period. --- */
 const TC_SCALES = [
-  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific',
-    bands:[ {lo:0,   name:'Tropical Depression'}, {lo:34, name:'Tropical Storm'},
-            {lo:64,  name:'Category 1'},          {lo:83, name:'Category 2'},
-            {lo:96,  name:'Category 3 (major)'},  {lo:113,name:'Category 4 (major)'},
-            {lo:137, name:'Category 5 (major)'} ] },
-  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific',
-    bands:[ {lo:0,  name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
-            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
-            {lo:85, name:'Typhoon (Very Strong)'}, {lo:105,name:'Typhoon (Violent)'} ] },
-  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR',
+  /* Bounds are stored in every unit the agency itself publishes, and classification uses the
+     ladder for the unit the user is working in (see classify below). Storing only integer-knot
+     ceilings of a metric ladder, as this table did before, put every one of CMA's and KMA's own
+     published thresholds one band low: CMA's 10.8 m/s is 20.995 kt, which a ">= 21 kt" test
+     reads as weaker than a depression. */
+  { id:'sshws', name:'Saffir-Simpson (NHC)', avg:60, region:'N Atlantic, E/C Pacific', unit:'kt',
+    // kt and km/h both published at nhc.noaa.gov/aboutsshws.php (119/154/178/209/252 km/h).
+    bands:[ {lo:0,   kmh:0,   name:'Tropical Depression'}, {lo:34,  kmh:63,  name:'Tropical Storm'},
+            {lo:64,  kmh:119, name:'Category 1'},          {lo:83,  kmh:154, name:'Category 2'},
+            {lo:96,  kmh:178, name:'Category 3 (major)'},  {lo:113, kmh:209, name:'Category 4 (major)'},
+            {lo:137, kmh:252, name:'Category 5 (major)'} ] },
+  { id:'jma', name:'JMA / WMO Typhoon Committee', avg:600, region:'NW Pacific', unit:'kt',
+    // JMA publishes m/s and knots side by side (jma.go.jp: 33 m/s = 64 kt, 44 = 85, 54 = 105).
+    bands:[ {lo:0,  ms:0,    name:'Tropical Depression'},   {lo:34, ms:17.2, name:'Tropical Storm'},
+            {lo:48, ms:24.5, name:'Severe Tropical Storm'}, {lo:64, ms:32.7, name:'Typhoon'},
+            {lo:85, ms:44,   name:'Typhoon (Very Strong)'}, {lo:105,ms:54,   name:'Typhoon (Violent)'} ] },
+  { id:'pagasa', name:'PAGASA', avg:600, region:'PAR', unit:'kt',
     // Depression floor 22 kt (= Beaufort 6, 39 km/h) per PAGASA operational practice.
     // Below that a system is carried as a Low Pressure Area, not a tropical cyclone.
-    // kmh carries PAGASA's OWN published km/h bounds, which are contiguous by design
-    // and are not strict conversions of the knot bounds (22 kt = 40.7, published as 39).
+    // PAGASA publishes both ladders (pagasa.dost.gov.ph, scale effective 23 March 2022) and they
+    // are not strict conversions of each other: the Typhoon floor is printed as 64 kt and as
+    // 118 km/h, and 118 km/h is 63.7 kt. The STS floor is printed as 87 km/h while Tropical Storm
+    // is printed as ending at 88; 89 is used here because it is what the 48 kt floor converts to
+    // and it leaves no overlap.
     bands:[ {lo:0,  kmh:0,   name:'Low Pressure Area'},
             {lo:22, kmh:39,  name:'Tropical Depression'},
             {lo:34, kmh:62,  name:'Tropical Storm'},
             {lo:48, kmh:89,  name:'Severe Tropical Storm'},
             {lo:64, kmh:118, name:'Typhoon'},
             {lo:100,kmh:185, name:'Super Typhoon'} ] },
-  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region',
+  { id:'bom', name:'Australian BOM', avg:600, region:'Australian region', unit:'kt',
+    // BOM publishes its categories in km/h. Those figures are not carried here because they were
+    // not confirmed from a BOM page; the knot bounds are the ones this table has always used.
     bands:[ {lo:0,  name:'below Category 1'}, {lo:34, name:'Category 1'},
             {lo:48, name:'Category 2'},       {lo:64, name:'Category 3 (severe)'},
             {lo:86, name:'Category 4 (severe)'}, {lo:108,name:'Category 5 (severe)'} ] },
-  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific',
-    // IBTrACS v04r01 HKO_CAT, stated directly in knots.
-    bands:[ {lo:0,  name:'Low'},                   {lo:22, name:'Tropical Depression'},
-            {lo:34, name:'Tropical Storm'},        {lo:48, name:'Severe Tropical Storm'},
-            {lo:64, name:'Typhoon'},               {lo:81, name:'Severe Typhoon'},
-            {lo:100,name:'Super Typhoon'} ] },
-  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific',
-    // Chinese National Standard, in force since 15 June 2006. Authoritative bounds are in
-    // m/s: 10.8 / 17.2 / 24.5 / 32.7 / 41.5 / 51.0. Knots below are the integer thresholds
-    // that reproduce those bounds (1 kt = 0.514444 m/s).
-    bands:[ {lo:0,  name:'Weaker than Tropical Depression'},
-            {lo:21, name:'Tropical Depression'},   {lo:34, name:'Tropical Storm'},
-            {lo:48, name:'Severe Tropical Storm'}, {lo:64, name:'Typhoon'},
-            {lo:81, name:'Severe Typhoon'},        {lo:100,name:'Super Typhoon'} ] },
-  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific',
-    // IBTrACS v04r01 KMA_CAT. Authoritative bounds are in m/s: 14 / 17 / 25 / 33.
-    // KMA's metric bounds differ from the JMA/CMA set, so the knot thresholds differ too.
-    bands:[ {lo:0,  name:'Low'},                   {lo:28, name:'Tropical Depression'},
-            {lo:34, name:'Tropical Storm'},        {lo:49, name:'Severe Tropical Storm'},
-            {lo:65, name:'Typhoon'} ] },
-  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean',
+  { id:'hko', name:'Hong Kong Observatory', avg:600, region:'NW Pacific', unit:'kt',
+    // Knots from IBTrACS v04r01 Technical Details (LW <22, TD 22-33, TS 34-47, STS 48-63,
+    // T 64-80, ST 81-99, SuperT >=100 kt); km/h as HKO prints them at hko.gov.hk.
+    bands:[ {lo:0,  kmh:0,   name:'Low'},                   {lo:22, kmh:41,  name:'Tropical Depression'},
+            {lo:34, kmh:63,  name:'Tropical Storm'},        {lo:48, kmh:88,  name:'Severe Tropical Storm'},
+            {lo:64, kmh:118, name:'Typhoon'},               {lo:81, kmh:150, name:'Severe Typhoon'},
+            {lo:100,kmh:185, name:'Super Typhoon'} ] },
+  { id:'cma', name:'CMA (China)', avg:120, region:'NW Pacific', unit:'ms',
+    // Chinese National Standard, in force since 15 June 2006. IBTrACS v04r01 Technical Details
+    // states the bounds in m/s, and m/s is what CMA is compared in. The knot figures are the
+    // exact conversions, carried for display only.
+    bands:[ {lo:0,      ms:0,    name:'Weaker than Tropical Depression'},
+            {lo:20.995, ms:10.8, name:'Tropical Depression'},
+            {lo:33.437, ms:17.2, name:'Tropical Storm'},
+            {lo:47.624, ms:24.5, name:'Severe Tropical Storm'},
+            {lo:63.564, ms:32.7, name:'Typhoon'},
+            {lo:80.670, ms:41.5, name:'Severe Typhoon'},
+            {lo:99.125, ms:51.0, name:'Super Typhoon'} ] },
+  { id:'kma', name:'KMA (South Korea)', avg:600, region:'NW Pacific', unit:'ms',
+    // IBTrACS v04r01 Technical Details: TD 14-17, TS 17-25, STS 25-33, TY >=33 m/s.
+    bands:[ {lo:0,      ms:0,  name:'Low'},
+            {lo:27.214, ms:14, name:'Tropical Depression'},
+            {lo:33.045, ms:17, name:'Tropical Storm'},
+            {lo:48.596, ms:25, name:'Severe Tropical Storm'},
+            {lo:64.147, ms:33, name:'Typhoon'} ] },
+  { id:'imd', name:'IMD', avg:180, region:'N Indian Ocean', unit:'kt',
+    // IBTrACS v04r01 Technical Details, stated directly in knots.
     bands:[ {lo:0,  name:'Low Pressure Area'},     {lo:17, name:'Depression'},
             {lo:28, name:'Deep Depression'},       {lo:34, name:'Cyclonic Storm'},
             {lo:48, name:'Severe Cyclonic Storm'}, {lo:64, name:'Very Severe Cyclonic Storm'},
             {lo:90, name:'Extremely Severe Cyclonic Storm'}, {lo:120,name:'Super Cyclonic Storm'} ] }
 ];
-function classify(vKt, bands){
-  let out = bands[0];
-  for(const b of bands) if(vKt >= b.lo) out = b;
+/* Compare in the unit the user is working in when the agency publishes a ladder in it, because
+   that is the table the agency itself prints in that unit. Where an agency's own two ladders
+   disagree at a boundary (PAGASA prints the Typhoon floor as both 64 kt and 118 km/h, and
+   118 km/h is 63.7 kt) the answer follows the user's unit rather than silently preferring one.
+   Agencies that publish in one unit only are always compared in that unit. */
+const BOUND_KEY = {kt:'lo', kmh:'kmh', ms:'ms'};
+function classify(vKt, scale, unit){
+  const bands = scale.bands || scale;               // accepts a bare band array for old callers
+  if(!isNum(vKt) || vKt < 0) return null;           // a negative wind is not on any scale
+  let key = BOUND_KEY[unit];
+  if(!key || !bands.every(b=>isNum(b[key]))) key = BOUND_KEY[scale.unit] || 'lo';
+  const u = key==='lo' ? 'kt' : (key==='kmh' ? 'kmh' : 'ms');
+  const x = speedTo(vKt, 'kt', u);
+  let out = null;
+  for(const b of bands) if(x >= b[key] - 1e-9) out = b;
   return out;
 }
 /* Convert an input wind of a given averaging period into each scale's
    native period using Table 1.2, then classify. */
-function tcClassifyAll(vKt, inputAvg, exposure){
+function tcClassifyAll(vKt, inputAvg, exposure, unit){
   const K = K_VMAX[exposure];
   return TC_SCALES.map(s=>{
     let v = vKt, note = null;
     if(inputAvg !== s.avg){
       if(inputAvg===60  && s.avg===600){ v = vKt*K; note='x'+K.toFixed(2); }
       else if(inputAvg===600 && s.avg===60){ v = vKt/K; note='/'+K.toFixed(2); }
-      else if(inputAvg===180 || s.avg===180){ note='no WMO factor'; }
+      /* WMO Table 1.2 covers 1-minute and 10-minute only. Everything else, which is CMA's
+         2-minute and IMD's 3-minute, passes through unconverted and must say so. An earlier
+         version tested for 180 alone, so CMA's 120 fell through with note = null and the card
+         rendered that as the chip "native". */
+      else { note='no WMO factor'; }
     }
-    return {scale:s, v:v, band:classify(v,s.bands), note:note};
+    return {scale:s, v:v, band:classify(v, s, unit), note:note};
   });
 }
 
@@ -734,6 +796,18 @@ function wetBulbStull(t, rh){
        - 4.686035;
 }
 // Exact: bisect the psychrometric equation e = es(Tw) - A p (1+0.00115 Tw)(T-Tw)
+/* Inverse of wetBulbPsychro: the relative humidity whose psychrometric wet bulb reads tw at
+   temperature t and pressure p. wetBulbPsychro is monotone in rh, so bisection is enough. */
+function rhFromWetBulb(t, tw, p){
+  if(!isNum(t) || !isNum(tw) || tw > t) return NaN;
+  p = isNum(p) ? p : 1013.25;
+  let lo = 0, hi = 100;
+  for(let i = 0; i < 80; i++){
+    const mid = 0.5*(lo + hi);
+    if(wetBulbPsychro(t, mid, p) < tw) lo = mid; else hi = mid;
+  }
+  return 0.5*(lo + hi);
+}
 function wetBulbPsychro(t, rh, p){
   const e = (rh/100)*esWater(t);
   // One branch across the whole bracket, so f stays monotonic and the root is
@@ -1184,7 +1258,7 @@ function utciEs(t){
   const g = [-2836.5744, -6028.076559, 19.54263612, -0.02737830188,
              0.000016261698, 7.0229056e-10, -1.8680009e-13];
   const tk = t + 273.15;
-  let es = 2.7150305 * Math.log1p(tk);
+  let es = 2.7150305 * Math.log(tk);   // Hardy (1998) / ITS-90. log1p here is a 0.9% error in es.
   for(let i = 0; i < g.length; i++) es += g[i] * Math.pow(tk, i - 2);
   return Math.exp(es) * 0.01;
 }
@@ -1253,12 +1327,23 @@ function utciCategory(u){
   return UTCI_BANDS[UTCI_BANDS.length-1].name;
 }
 /* Published validity domain. Returns the list of breaches, empty if in range. */
+/* Published domain, Broede et al. (2012), "Usage guidelines":
+   -50 <= Ta <= +50 C, -30 <= Tr - Ta <= +70 C, 0.5 <= va <= 30.3 m/s, 5% <= rH <= 100%
+   with pa < 50 hPa. The vapour-pressure limit is the one that bites in the tropics: it is
+   passed a little above 33 C at saturation, and beyond it the polynomial does not merely lose
+   accuracy, it inverts. At 50 C and 100% RH the reference implementation itself returns
+   -352 C, which its own band table calls extreme cold stress. */
 function utciRangeIssues(ta, tmrt, v10, rh){
   const out = [];
-  if(ta < -50 || ta > 50)               out.push('air temperature outside -50 to +50 &deg;C');
+  if(ta < -50 || ta > 50)               out.push('air temperature outside &minus;50 to +50 &deg;C');
   if(tmrt-ta < -30 || tmrt-ta > 70)     out.push('T<sub>mrt</sub> &minus; T<sub>a</sub> outside &minus;30 to +70 K');
-  if(v10 > 17)                          out.push('wind above 17 m/s, the limit most implementations enforce');
+  if(v10 < 0.5)                         out.push('wind below 0.5 m/s, the published lower limit');
+  else if(v10 > 30.3)                   out.push('wind above 30.3 m/s, the published upper limit');
+  else if(v10 > 17)                     out.push('wind above 17 m/s, the limit the reference implementations enforce');
   if(rh < 5 || rh > 100)                out.push('relative humidity outside 5 to 100%');
+  const pa = utciEs(ta) * (rh/100);     // hPa
+  if(isNum(pa) && pa >= 50)
+    out.push('water vapour pressure ' + pa.toFixed(1) + ' hPa, above the published 50 hPa (5 kPa) limit, where the polynomial inverts');
   return out;
 }
 
@@ -1537,9 +1622,13 @@ function crossTime(t0, t1, h, lat, lon){
   return 0.5*(a + b);
 }
 
-function sunTimes(dateUTC, latDeg, lonDeg){
+/* tzHours is optional. Given, the 24-hour window is centred on midday of the caller's own
+   civil day; left out, it falls back to local solar noon from longitude. The two agree almost
+   everywhere, but in a zone far from its standard meridian they do not: Apia (172 W, UTC+13)
+   asked for 21 June came back with 22 June's rise and set. */
+function sunTimes(dateUTC, latDeg, lonDeg, tzHours){
   const day = Date.UTC(dateUTC.getUTCFullYear(), dateUTC.getUTCMonth(), dateUTC.getUTCDate());
-  const noonGuess = day + (12 - lonDeg/15)*3600e3;      // local solar noon, roughly
+  const noonGuess = day + (12 - (isNum(tzHours) ? tzHours : lonDeg/15))*3600e3;
   const step = 5*60e3;                                   // 5 minute scan
   const t0 = noonGuess - 12*3600e3, t1 = noonGuess + 12*3600e3;
 
@@ -1634,7 +1723,15 @@ function qnhNWS(ps, hM){
 }
 
 /* --- 3.6 Pressure altitude & density altitude --- */
-function pressureAltitude(p){ return (T0K/LAPSE)*(1 - Math.pow(p/P0, 1/NEXP)); }  // m
+/* Below the tropopause this inverts the ISA lapse relation. Above it the atmosphere is
+   isothermal, so extrapolating the lapse relation is not the inverse of isa(H): it put
+   100 hPa at 15797 m instead of 16180 m, and 50 hPa a full 1253 m low. */
+const P_TP = P0*Math.pow(T_TP/T0K, NEXP);              // 226.3206 hPa at 11000 gpm
+function pressureAltitude(p){
+  if(!isNum(p) || p <= 0) return NaN;
+  if(p >= P_TP) return (T0K/LAPSE)*(1 - Math.pow(p/P0, 1/NEXP));
+  return H_TP + (R_ISA*T_TP/G0)*Math.log(P_TP/p);
+}
 function densityAltitude(p, tC, td){
   const e   = isNum(td) ? esWater(td) : 0;
   const tK  = tC+273.15;
@@ -1677,6 +1774,7 @@ function dryLapse(){ return 1000*G0/CPD; }   // K/km
 /* Stull eq. 4.37b saturated adiabatic lapse rate */
 function moistLapse(tK, p){
   const es = esWater(tK-273.15);
+  if(!(p > es)) return NaN;        // es >= p gives a negative saturation mixing ratio
   const rs = EPS*es/(p-es);
   const a = 8711, b = 1.35e7, Gd = 9.8;
   return Gd*(1 + a*rs/tK)/(1 + b*rs/(tK*tK));   // K/km
@@ -1685,7 +1783,8 @@ function moistLapse(tK, p){
 /* Moist adiabat in pressure coordinates, RK4. dT/dp per MetPy/Bakhshaii. */
 function moistLapseDTDP(tK, p){
   const es = esWater(tK-273.15);
-  const rs = EPS*es/Math.max(p-es, 1e-6);
+  if(!(p > es)) return NaN;        // same guard as moistLapse rather than a 1e-6 floor
+  const rs = EPS*es/(p-es);
   const Lv = 3337118.5 - 3642.8583*tK + 2.1263947*tK*tK;   // Smithsonian poly
   return (RD*tK + Lv*rs)/(p*(CPD + Lv*Lv*rs*EPS/(RD*tK*tK)));
 }
@@ -1793,7 +1892,7 @@ const API = {
   uvFromSpeedDir,speedDirFromUV,Z0,logProfile,powerLaw,windPowerDensity,
   esWater,esIce,esBolton,dewpointFromRH,rhFromDewpoint,frostpointFromRHi,
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
-  absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,iceBulbPsychro,heatIndexF,windChillC,
+  absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,rhFromWetBulb,iceBulbPsychro,heatIndexF,windChillC,
   humidex,apparentTempBOM,wbgtSimple,
   LJ,ljSolarPosition,ljSolarParameters,wbgtLiljegren,hittekracht,
   ACGIH_WBGT,acgihAllocation,
@@ -1822,13 +1921,15 @@ const N = (x,d)=> (typeof x!=='number'||!isFinite(x)) ? '—'
                  : (d===0 ? Math.round(x).toString() : x.toFixed(d==null?2:d));
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
+const VERSION = '1.4.0';
 const MODULES = [
   {id:'wind',   label:'Wind &amp; tropical cyclone'},
   {id:'moist',  label:'Moisture &amp; comfort'},
   {id:'press',  label:'Pressure &amp; altitude'},
   {id:'thermo', label:'Thermodynamics'},
   {id:'sun',    label:'Sun &amp; day length'},
-  {id:'ref',    label:'Reference'}
+  {id:'ref',    label:'Reference'},
+  {id:'say',    label:'Comments &amp; suggestions'}
 ];
 const SPEED_OPTS = [['kt','knots'],['kmh','km/h'],['ms','m/s'],['mph','mph'],['fts','ft/s']];
 const EXP_OPTS   = M.EXPOSURES.map(e=>[e, M.EXPOSURE_LABEL[e]]);
@@ -1853,10 +1954,16 @@ function card(mod, spec){
     html += '<div class="fields'+(spec.fields.length===1?' one':'')+'">';
     for(const f of spec.fields){
       const id = ns+f.id; ids[f.id] = id;
-      html += '<div class="f'+(f.wide?' f2':'')+'"><label class="fl" for="'+id+'">'+f.label+'</label>';
+      html += '<div class="f'+(f.wide?' f2':'')+(f.full?' ffull':'')+'"><label class="fl" for="'+id+'">'+f.label+'</label>';
       if(f.type==='sel'){
         html += '<select id="'+id+'">'+f.opts.map(o=>
           '<option value="'+esc(o[0])+'"'+(o[0]===f.val?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
+      } else if(f.type==='txt'){
+        html += '<input type="text" id="'+id+'"'+(f.val?' value="'+esc(f.val)+'"':'')
+             + (f.ph ? ' placeholder="'+esc(f.ph)+'"' : '')+'>';
+      } else if(f.type==='area'){
+        html += '<textarea id="'+id+'" rows="'+(f.rows||6)+'"'
+             + (f.ph ? ' placeholder="'+esc(f.ph)+'"' : '')+'>'+esc(f.val||'')+'</textarea>';
       } else {
         html += '<input type="number" id="'+id+'"'
              + (f.val === '' ? '' : ' value="'+f.val+'"')
@@ -1882,7 +1989,7 @@ function card(mod, spec){
     const v = {};
     for(const f of (spec.fields||[])){
       const e = document.getElementById(ids[f.id]);
-      v[f.id] = (f.type==='sel') ? e.value : parseFloat(e.value);
+      v[f.id] = (f.type==='sel'||f.type==='txt'||f.type==='area') ? e.value : parseFloat(e.value);
     }
     return v;
   }
@@ -1989,21 +2096,29 @@ card('wind', {
   ],
   compute(v){
     const kt = M.speedTo(v.v, v.u, 'kt');
-    const list = M.tcClassifyAll(kt, +v.fr, v.ex);
+    if(!isFinite(kt) || kt < 0) return {html:'', flag:'Enter a wind speed of zero or more.'};
+    /* The display unit is passed through so each agency is compared against the ladder it
+       publishes in that unit. Entering 118 km/h used to return Severe Tropical Storm from
+       PAGASA, whose own table starts Typhoon at 118 km/h, because 118 km/h is 63.7 kt and the
+       comparison was made in whole knots. */
+    const list = M.tcClassifyAll(kt, +v.fr, v.ex, v.u);
     let unverified = false;
     const body = list.map(r=>{
       const conv = r.note ? '<span class="chip'+(r.note==='no WMO factor'?' w':' a')+'">'+r.note+'</span>' : '<span class="chip">native</span>';
       if(r.note==='no WMO factor') unverified = true;
+      /* One decimal, because rounding the display while classifying the exact value printed
+         "64 kt" next to "Tropical Storm" for an exact 63.66 kt. */
       return '<tr><td>'+r.scale.name+'<br><span class="chip">'+(r.scale.avg/60)+'-min</span></td>'+
-             '<td class="num">'+N(r.v,0)+'</td>'+
-             '<td class="num">'+N(M.speedTo(r.v,'kt','kmh'),0)+'</td>'+
-             '<td><b>'+r.band.name+'</b></td><td>'+conv+'</td></tr>';
+             '<td class="num">'+N(r.v,1)+'</td>'+
+             '<td class="num">'+N(M.speedTo(r.v,'kt','kmh'),1)+'</td>'+
+             '<td class="num">'+N(M.speedTo(r.v,'kt','ms'),1)+'</td>'+
+             '<td><b>'+(r.band ? r.band.name : 'below this scale')+'</b></td><td>'+conv+'</td></tr>';
     }).join('');
     return {
-      html:'<div class="scroll"><table><thead><tr><th>Scale</th><th class="num">kt</th><th class="num">km/h</th><th>Classification</th><th>Conversion</th></tr></thead><tbody>'+body+'</tbody></table></div>',
+      html:'<div class="scroll"><table><thead><tr><th>Scale</th><th class="num">kt</th><th class="num">km/h</th><th class="num">m/s</th><th>Classification</th><th>Conversion</th></tr></thead><tbody>'+body+'</tbody></table></div>',
       flag: unverified
-        ? 'IMD uses a 3-minute averaging period, for which WMO/TD-1555 Table 1.2 publishes no agency conversion factor — that row shows the wind unconverted and is <b>not comparable</b>. IMD’s averaging period could not be confirmed from an IMD-published source.'
-        : 'Each scale is evaluated at its own native averaging period, with WMO Table 1.2 applied where the input period differs. PAGASA uses a 10-minute averaging period following WMO guidance, confirmed from inside the agency, though it is not stated on PAGASA’s public pages.'
+        ? 'Two rows carry the chip <b>no WMO factor</b>. WMO/TD-1555 Table 1.2 converts between 1-minute and 10-minute winds only, and publishes nothing for CMA&rsquo;s 2-minute or IMD&rsquo;s 3-minute period, so those winds are shown <b>unconverted and are not comparable</b> with the rest of the table. IMD&rsquo;s averaging period could not be confirmed from an IMD-published source.'
+        : 'Each scale is evaluated at its own native averaging period, with WMO Table 1.2 applied where the input period differs, and each is compared against the ladder its own agency publishes in the unit you have selected. PAGASA uses a 10-minute averaging period following WMO guidance, confirmed from inside the agency, though it is not stated on PAGASA&rsquo;s public pages.'
     };
   },
   src:'Thresholds: NHC (Saffir-Simpson, 1-min); WMO TCP-23 and JMA (10-min); PAGASA, effective 23 March 2022 (knot values are canonical — PAGASA’s published km/h figures are internally inconsistent at the STS boundary); BOM; IMD (<i>Mausam</i>).'
@@ -2079,6 +2194,16 @@ card('wind', {
     {id:'S',    label:'Size param S (KZ07)', type:'num', val:1.0, step:0.05}
   ],
   compute(v){
+    /* NaN from an empty box used to collapse the numerical inversion onto its lower bracket
+       and print "Vmax 0.0 kt" for a 950 hPa cyclone, in hero type, with no flag. */
+    const dashPW = msg => ({rows: rowsOf([['V<sub>max</sub> (1-min)','—','kt','hero'],
+                                          ['central pressure','—','hPa','hero']]), flag: msg});
+    const needPW = [['val','the input value']].concat(v.meth==='ah77' ? []
+      : [['penv','P<sub>env</sub>'],['lat','latitude'],['c','translation speed'],['S','size parameter S']])
+      .filter(f => !isFinite(v[f[0]])).map(f => f[1]);
+    if(needPW.length) return dashPW('Nothing is computed until every box is filled. Empty: <b>'+needPW.join(', ')+'</b>.');
+    if(v.mode==='w' && v.val <= 0) return dashPW('A central pressure of '+N(v.val,1)+' hPa is not a tropical cyclone. Enter the pressure in hectopascals.');
+    if(v.mode!=='w' && v.val <  0) return dashPW('Wind speed cannot be negative.');
     const S = Math.max(v.S, 0.4);
     let wind, pres;
     if(v.meth==='ah77'){
@@ -2137,7 +2262,7 @@ card('wind', {
 card('wind', {
   title:'Height adjustment to 10 m',
   fields:[
-    {id:'v',  label:'Measured speed', type:'num', val:12, step:0.1},
+    {id:'v',  label:'Measured speed (any unit)', type:'num', val:12, step:0.1},
     {id:'z',  label:'At height (m)',  type:'num', val:20, step:0.5},
     {id:'zt', label:'To height (m)',  type:'num', val:10, step:0.5},
     {id:'z0', label:'Terrain', type:'sel', val:'open',
@@ -2151,12 +2276,12 @@ card('wind', {
     const lg = M.logProfile(v.v, v.z, z0, v.zt);
     return {
       rows: rowsOf([
-        ['log law (z₀ = '+z0+' m)', N(lg,2), 'm/s', 'hero'],
-        ['power law &alpha; = 1/7', N(M.powerLaw(v.v,v.z,v.zt,1/7),2), 'm/s'],
-        ['power law &alpha; = 0.11 (offshore)', N(M.powerLaw(v.v,v.z,v.zt,0.11),2), 'm/s', 'dim'],
+        ['log law (z₀ = '+z0+' m)', N(lg,2), '', 'hero'],
+        ['power law &alpha; = 1/7', N(M.powerLaw(v.v,v.z,v.zt,1/7),2), ''],
+        ['power law &alpha; = 0.11 (offshore)', N(M.powerLaw(v.v,v.z,v.zt,0.11),2), '', 'dim'],
         ['ratio to input', isFinite(lg)?N(lg/v.v,3):'—', '', 'dim']
       ]),
-      flag: 'The log law holds for <b>neutral stability</b> only and needs z &gt; z₀. Over vegetated or built terrain a constant 1/7 power-law exponent “may yield quite erroneous estimates” — prefer the log law there. Power-law accuracy is generally limited to height differences under about 50 m.'
+      flag: '<b>The answer is in whatever unit you typed.</b> Both laws are pure ratios, so knots in give knots out; this card has no unit selector and does not convert. The log law holds for <b>neutral stability</b> only and needs z &gt; z₀. Over vegetated or built terrain a constant 1/7 power-law exponent “may yield quite erroneous estimates” — prefer the log law there. Power-law accuracy is generally limited to height differences under about 50 m.'
     };
   },
   src:'Log profile from the surface-layer form u(z) = (u<sub>*</sub>/k)·ln(z/z₀), von Kármán k ≈ 0.4 (AMS Glossary). Roughness lengths: Davenport-Wieringa classification, WMO/TD-No. 1555 Table 2.1 (mid-range value of each class).'
@@ -2288,7 +2413,12 @@ card('moist', {
       ['humidex band',      humidexBand(hx), '', 'dim txt']
     ];
     let flag = null;
-    if(hi.hi>110 && hi.branch!=='simple')
+    /* NWS applies the dry-air correction only up to 112 F, because its sqrt((17-|T-95|)/17)
+       term goes imaginary above that. Past 112 the bare Rothfusz regression was returned with
+       no flag, and at 120 F and 5% RH it reported a heat index 5.7 K BELOW the air temperature. */
+    if(tF > 112 && rh < 13 && hi.branch === 'rothfusz')
+      flag = 'Above <b>112&nbsp;&deg;F (44.4&nbsp;&deg;C)</b> in air this dry, the NWS procedure has no adjustment to apply: its dry-air correction takes the square root of (17&nbsp;&minus;&nbsp;|T&nbsp;&minus;&nbsp;95|)/17, which turns negative there. What is shown is the bare Rothfusz regression extrapolated past the published chart, which ends at 110&nbsp;&deg;F, and at this corner it returns a heat index <b>below</b> the air temperature. Do not use it. Read the WBGT or UTCI cards instead.';
+    else if(hi.hi>110 && hi.branch!=='simple')
       flag = 'Above about 110 °F the Rothfusz polynomial extrapolates badly — at 104 °F and 60% RH it overshoots the published NWS chart by roughly 8 °F. Treat high heat-index values as indicative only. Lu &amp; Romps (2022) rebuilt the underlying model to fix exactly this.';
     else if(!wcOK)
       flag = 'Wind chill is defined only at or below 10 °C with wind above about 5 km/h, so it is not reported here. The other indices are for warm conditions and are the relevant ones.';
@@ -2397,16 +2527,30 @@ card('moist', {
   ],
   rule:'Hittekracht is not a new physical quantity. It is the <b>outdoor Wet Bulb Globe Temperature</b> placed on a 0 to 10 scale, the way wind force and sun strength are. WBGT weights the natural wet bulb 70%, the black globe 20% and the air temperature 10%, so humidity dominates while radiation and wind both matter. That is why the date, the position and the radiation are needed: the globe and the wetted wick each sit in the sun.',
   compute(v){
-    const d = new Date(Date.UTC(2026, (parseInt(v.mon,10)||1)-1, v.day||1,
-                                Math.floor(v.hr||0), Math.round(((v.hr||0)%1)*60)));
+    const clear0 = v.smode === 'clear';
+    const blank = [['t','air temperature'],['rh','relative humidity'],['w','wind'],['p','pressure'],
+                   ['lat','latitude'],['lon','longitude'],['day','day of month'],['hr','hour']]
+                    .concat(clear0 ? [] : [['s','global radiation']])
+                    .filter(f => !isFinite(v[f[0]])).map(f => f[1]);
+    if(blank.length) return {rows: rowsOf([['hittekracht','—','','hero'],['outdoor WBGT','—','°C','hero']]),
+      flag:'Nothing is computed until every box is filled. Empty: <b>'+blank.join(', ')+'</b>.',
+      labels:{s: clear0 ? 'not needed in clear-sky mode' : 'Global radiation W/m²'}, disable:{s: clear0}};
+    const d = new Date(Date.UTC(2026, (parseInt(v.mon,10)||1)-1, v.day,
+                                Math.floor(v.hr), Math.round((v.hr%1)*60)));
     // Clear-sky mode invents nothing. It hands the model the top-of-atmosphere
     // irradiance for this sun angle and lets Liljegren's own NORMSOLAR_MAX cap
     // of 0.85 decide the surface value, exactly as it would for a measurement
     // that came in too high.
     const spc = M.ljSolarPosition(d, v.lat, v.lon);
     const toa = M.LJ.SOLAR_CONST * Math.max(0, spc.cza) / (spc.soldist*spc.soldist);
-    const clear = v.smode === 'clear';
-    const solarIn = clear ? toa : v.s;
+    const clear = clear0;
+    /* Below the model's own cutoff the direct-beam fraction is zero and Liljegren's code
+       applies whatever global radiation it was handed as pure diffuse. 750 W/m2 entered at
+       22:00 therefore gave hittekracht 7 while this card told the user the radiation term was
+       zero. Zeroing it here makes that sentence true and removes a 2.9 C step across the five
+       minutes either side of the cutoff, where the clip from 750 to 11.6 W/m2 switches on. */
+    const night = !(spc.cza >= M.LJ.CZA_MIN);
+    const solarIn = night ? 0 : (clear ? toa : v.s);
     const r = M.wbgtLiljegren(v.t, v.rh, v.p, Math.max(v.w,0), solarIn, d, v.lat, v.lon);
     if(!r) return {rows: rowsOf([['hittekracht','—','','hero'],
       ['the iteration did not converge','','','hero txt']]),
@@ -2451,10 +2595,10 @@ card('moist', {
       rows.push([name, a.label, '', '']);
     }
     const notes = [];
-    if(r.elev <= 0) notes.push('The sun is below the horizon at this time and place, so the radiation term is zero whatever you entered.');
-    else if(Math.abs(r.solarUsed - v.s) > 1) notes.push('Global radiation was adjusted from ' + N(v.s,0) +
+    if(night) notes.push('The sun is at or below the model&rsquo;s cutoff, about 0.5&deg; of elevation, at this time and place, so the radiation term is zero whatever you entered.');
+    else if(!clear && Math.abs(r.solarUsed - v.s) > 1) notes.push('Global radiation was adjusted from ' + N(v.s,0) +
       ' to ' + N(r.solarUsed,0) + ' W/m&sup2;, because the model caps the measured value at 85% of the top-of-atmosphere irradiance for this sun angle.');
-    if(clear && r.elev > 0) notes.push('No measurement was used. The radiation is ' + N(r.solarUsed,0) +
+    if(clear && !night) notes.push('No measurement was used. The radiation is ' + N(r.solarUsed,0) +
       ' W/m&sup2;, which is 85% of the ' + N(toa,0) + ' W/m&sup2; reaching the top of the atmosphere at this sun angle. ' +
       'That is the ceiling the model applies to any measurement, so it is a clear-sky upper bound: under cloud the real heat stress is lower.');
     if(anyUntab) notes.push('ACGIH tabulates no continuous-work entry for heavy or very heavy workloads, so below the lowest limit for those the table imposes no restriction at all. Those rows therefore give the WBGT at which a limit first appears, rather than naming the most permissive row that happens to exist, which would read as a restriction the standard does not set.');
@@ -2494,7 +2638,12 @@ card('moist', {
     }
     const w = M.wbgtISO(v.tnw, v.tg, v.t, solar);
     const tmrt = M.mrtFromGlobe(v.tg, v.t, Math.max(v.w,0), v.d);
-    const rhApprox = M.rhFromDewpoint(v.t, Math.min(v.tnw, v.t));
+    /* Not rhFromDewpoint(t, tnw). A wet bulb always reads above the dewpoint and the NATURAL
+       wet bulb reads above the psychrometric one, so treating Tnw as a dewpoint overstated the
+       humidity twice over and moved the UTCI row by about +1 K. Tnw is read here as a
+       psychrometric wet bulb, which is still an approximation and still an upper bound. */
+    const rhApprox = M.rhFromWetBulb ? M.rhFromWetBulb(v.t, Math.min(v.tnw, v.t), 1013.25)
+                                     : M.rhFromDewpoint(v.t, Math.min(v.tnw, v.t));
     const band = M.wbgtBand(w);
     const rows = [
       ['WBGT', N(w,2), '°C', 'hero'],
@@ -2505,7 +2654,8 @@ card('moist', {
       ['  T<sub>mrt</sub> − T<sub>a</sub>', (tmrt>v.t?'+':'')+N(tmrt-v.t,1), 'K', 'dim'],
       ['  wind at globe height', N(M.scaleWind(Math.max(v.w,0),1.1),2), 'm/s', 'dim'],
       ['globe above air temperature', (v.tg>v.t?'+':'')+N(v.tg-v.t,1), 'K', 'dim'],
-      ['UTCI at this T<sub>mrt</sub>', N(M.utci(v.t, tmrt, Math.max(v.w,0.5), Math.min(Math.max(rhApprox,5),100)),1), '°C', 'dim']
+      ['UTCI at this T<sub>mrt</sub>', N(M.utci(v.t, tmrt, Math.max(v.w,0.5), Math.min(Math.max(rhApprox,5),100)),1), '°C', 'dim'],
+      ['&nbsp;&nbsp;humidity it assumed', N(rhApprox,0), '%', 'dim']
     ];
     let flag = null;
     if(v.tg < v.t) flag = 'A globe reading below air temperature implies a net radiative <b>loss</b>, which happens under a clear night sky but not in sun. T<sub>mrt</sub> comes out below air temperature, which is correct for that case.';
@@ -2641,6 +2791,9 @@ card('press', {
     {id:'h',  label:'Aerodrome elevation m', type:'num', val:150, step:1}
   ],
   compute(v){
+    if(!isFinite(v.ps) || v.ps <= 0 || !isFinite(v.h))
+      return {rows: rowsOf([['QNH (ISA reduction)','—','hPa','hero'],['pressure altitude','—','m','hero']]),
+        flag:'Station pressure must be a positive number of hectopascals and the elevation must be filled in. At zero the altimetry relations return a pressure altitude of 44 km.'};
     const qISA = M.qnhISA(v.ps, v.h);
     const qNWS = M.qnhNWS(v.ps, v.h);
     const pa   = M.pressureAltitude(v.ps);
@@ -2671,6 +2824,14 @@ card('press', {
     {id:'td', label:'Dewpoint °C', type:'num', val:26, step:0.1}
   ],
   compute(v){
+    /* The engine treats a missing dewpoint as an optional argument and assumes dry air, which
+       moved the answer 130 m and still printed the flag about moist air being less dense. */
+    if(!isFinite(v.p) || v.p <= 0 || !isFinite(v.t) || !isFinite(v.td))
+      return {rows: rowsOf([['density altitude','—','m','hero'],['density altitude','—','ft','hero']]),
+        flag:'Fill in pressure, temperature and dewpoint. A blank dewpoint is not the same as dry air, and this card will not assume it.'};
+    if(v.td > v.t)
+      return {rows: rowsOf([['density altitude','—','m','hero'],['density altitude','—','ft','hero']]),
+        flag:'Dewpoint is above air temperature, which is not physical. Check the two readings.'};
     const d  = M.densityAltitude(v.p, v.t, v.td);
     const pa = M.pressureAltitude(v.p);
     const isaT = M.isa(Math.max(pa,0)).T - 273.15;
@@ -2847,6 +3008,14 @@ card('thermo', {
     {id:'p',  label:'Surface pressure hPa', type:'num', val:1013.25, step:0.1}
   ],
   compute(v){
+    if(!isFinite(v.t) || !isFinite(v.td) || !isFinite(v.p) || v.p <= 0)
+      return {rows: rowsOf([['LCL — Romps (2017) exact','—','m','hero'],['LCL — Espy rule of thumb','—','m','hero']]),
+              flag:'Fill in temperature, dewpoint and pressure.'};
+    /* Espy is a bare multiple of the dewpoint depression and goes negative when Td > T, which
+       printed a cloud base of -625 m beside a Romps value clamped to 0. */
+    if(v.td > v.t)
+      return {rows: rowsOf([['LCL — Romps (2017) exact','—','m','hero'],['LCL — Espy rule of thumb','—','m','hero']]),
+              flag:'Dewpoint is above air temperature, which is not physical, so there is no lifting condensation level to report. Check the two readings.'};
     const tK  = v.t+273.15, tdK = v.td+273.15;
     const rh  = M.rhFromDewpoint(v.t, v.td);
     const espy= M.lclEspy(v.t, v.td);
@@ -2983,12 +3152,34 @@ card('sun', {
   },
   rule:'These are not forecasts. Rise and set are computed from the sun\'s position and depend on no weather prediction at all. The only real uncertainty is refraction near the horizon, which varies with the actual temperature profile and can move the times by a minute or so on an unusual day. <b>Day length is the figure agrometeorology usually wants</b>, since photoperiod drives crop phenology.',
   compute(v){
-    const d = new Date(Date.UTC(v.yr||2026, (parseInt(v.mon,10)||1)-1, v.day||1));
-    const r = M.sunTimes(d, v.lat, v.lon);
-    const off = (v.tz||0)*3600e3;
-    const T = x => x ? new Date(x.getTime()+off).toISOString().slice(11,16) : '—';
+    const dash = msg => ({rows: rowsOf([['sunrise','—',''],['sunset','—',''],['day length','—','']]), flag: msg});
+    /* No box here has a safe default. An assumed UTC offset is the worst of them: it prints
+       UTC as if it were local, which puts sunset before sunrise and still looks like an answer. */
+    const blank = [['lat','latitude'],['lon','longitude'],['yr','year'],['day','day of month'],['tz','hours from UTC']]
+                    .filter(f => !isFinite(v[f[0]])).map(f => f[1]);
+    if(blank.length) return dash('Nothing is computed until every box is filled. Empty: <b>'+blank.join(', ')+'</b>.');
+    const yr = Math.round(v.yr), mon = parseInt(v.mon,10), dayN = Math.round(v.day);
+    const d = new Date(Date.UTC(yr, mon-1, dayN));
+    if(d.getUTCMonth() !== (mon-1+12)%12 || d.getUTCDate() !== dayN)
+      return dash('There is no day '+dayN+' in month '+mon+' of '+yr+'. Day of month must be between 1 and the length of the month.');
+    if(Math.abs(v.lat) > 90) return dash('Latitude must be between &minus;90 and +90&deg;.');
+    if(Math.abs(v.tz) > 14)  return dash('No time zone is further from UTC than &plusmn;14 hours.');
+    const r = M.sunTimes(d, v.lat, v.lon, v.tz);
+    const off = v.tz*3600e3;
+    /* Round to the nearest minute. toISOString truncates, which put half of every displayed
+       time a minute early: De Bilt's 20:03:42 solstice sunset read 22:03 instead of 22:04.
+       A rise or set can also fall on the neighbouring civil day, which as a bare 00:03 reads
+       as sunset before sunrise, so the offset in days is printed when there is one. */
+    const want = Date.UTC(yr, mon-1, dayN);
+    const civil = ms => { const z = new Date(ms); return Date.UTC(z.getUTCFullYear(), z.getUTCMonth(), z.getUTCDate()); };
+    const T = x => {
+      if(!x) return '—';
+      const ms = Math.round((x.getTime()+off)/60000)*60000;
+      const n  = Math.round((civil(ms) - want)/864e5);
+      return new Date(ms).toISOString().slice(11,16) + (n ? ' <span class="dayoff">('+(n>0?'+':'')+n+' d)</span>' : '');
+    };
     const span = (e,a,b) => e.state !== 'normal' ? e.state : (T(e.up)+' – '+T(e.down));
-    const hm = h => h==null ? '—' : (Math.floor(h)+' h '+String(Math.round((h%1)*60)).padStart(2,'0')+' m');
+    const hm = h => { if(h==null) return '—'; const m = Math.round(h*60); return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' m'; };
     const rows = [
       ['sunrise', T(r.rise.up), '', 'hero'],
       ['sunset',  T(r.rise.down), '', 'hero'],
@@ -3005,7 +3196,73 @@ card('sun', {
     if(r.astronomical.state === 'never below') notes.push('Astronomical twilight never ends: the sky does not reach full darkness at this latitude on this date.');
     return {rows: rowsOf(rows), flag: notes.length ? notes.join(' ') : null};
   },
-  src:'Computed by bisecting the solar elevation from the same Astronomical Almanac position used by the WBGT calculator, rather than from a separate rise/set formula, so there is one piece of astronomy in the engine and it is the one checked against known geometry. Thresholds are the standard ones on the <b>geometric</b> centre of the sun: <b>−0.833°</b> for rise and set, which allows 16′ for the solar semi-diameter and 34′ for mean refraction, then <b>−6°, −12° and −18°</b> for civil, nautical and astronomical twilight. The search window is centred on local solar noon so it follows the local day rather than the UTC day. Checked against published tables: De Bilt on the June solstice gives 05:18 and 22:03 CEST with a day length of 16 h 45 m, and Manila on the same date 05:28 and 18:27 PHT.'
+  src:'Computed by bisecting the solar elevation from the same Astronomical Almanac position used by the WBGT calculator, rather than from a separate rise/set formula, so there is one piece of astronomy in the engine and it is the one checked against known geometry. Thresholds are the standard ones on the <b>geometric</b> centre of the sun: <b>−0.833°</b> for rise and set, which allows 16′ for the solar semi-diameter and 34′ for mean refraction, then <b>−6°, −12° and −18°</b> for civil, nautical and astronomical twilight. The search window is centred on local solar noon so it follows the local day rather than the UTC day. Times are rounded to the nearest minute, not truncated. Checked against the USNO one-day tables: De Bilt on the June solstice gives 05:18 and 22:04 CEST with a day length of 16 h 45 m, and Manila on the same date 05:28 and 18:28 PHT for a day length of 13 h 00 m. A rise or set that falls on the neighbouring civil day is marked <b>(+1 d)</b> or <b>(&minus;1 d)</b>, which happens near the poles in summer; the search window follows the civil day of the UTC offset you enter, so a zone far from its standard meridian still gets the day you asked for.'
+});
+
+/* =================================================================
+   COMMENTS AND SUGGESTIONS
+   ================================================================= */
+/* The app has no server and asks for no account, so there is nowhere for a message to go
+   except the reader's own mail client. This card composes the text and hands it over; it
+   never sends anything, and the offline build behaves exactly the same. */
+let SAY_TEXT = '';
+window.sayCopy = function(btn){
+  const done = ok => { btn.textContent = ok ? 'Copied' : 'Could not copy. Select the text above instead.';
+                       setTimeout(()=>{ btn.textContent = 'Copy the message'; }, 2500); };
+  try{ navigator.clipboard.writeText(SAY_TEXT).then(()=>done(true), ()=>done(false)); }
+  catch(e){ done(false); }
+};
+
+card('say', {
+  title:'Send a comment or a suggestion',
+  span:true,
+  fields:[
+    {id:'kind', label:'What is this about', type:'sel', val:'wrong', wide:true, opts:[
+      ['wrong','A number I think is wrong'],
+      ['source','A source or a threshold that has changed'],
+      ['add','A calculator you would like added'],
+      ['ask','A question about a result'],
+      ['other','Something else']]},
+    {id:'where', label:'Which part', type:'sel', val:'', wide:true, opts:[
+      ['','(not about one particular card)'],
+      ['Wind & tropical cyclone','Wind &amp; tropical cyclone'],
+      ['Moisture & comfort','Moisture &amp; comfort'],
+      ['Pressure & altitude','Pressure &amp; altitude'],
+      ['Thermodynamics','Thermodynamics'],
+      ['Sun & day length','Sun &amp; day length'],
+      ['Reference','Reference']]},
+    {id:'who', label:'Your name and where you work, if you want to give it', type:'txt', full:true,
+      ph:'optional'},
+    {id:'msg', label:'Your message', type:'area', full:true, rows:7,
+      ph:'If it is a wrong number, the inputs you used and the answer you expected are the most useful thing you can give.'}
+  ],
+  compute(v){
+    const KIND = {wrong:'a number that looks wrong', source:'a source or threshold that has changed',
+                  add:'a calculator to add', ask:'a question about a result', other:'a comment'};
+    const has = (v.msg || '').trim().length > 0;
+    const subject = 'Kalkunahon ' + VERSION + ': ' + (KIND[v.kind] || 'a comment');
+    const lines = [(v.msg || '').trim(), '', '--',
+                   'Kalkunahon ' + VERSION,
+                   'About: ' + (KIND[v.kind] || 'a comment') + (v.where ? ', in ' + v.where : '')];
+    if((v.who || '').trim()) lines.push('From: ' + v.who.trim());
+    SAY_TEXT = lines.join('\n');
+    const href = 'mailto:jbzerrudo@pagasa.dost.gov.ph?subject=' + encodeURIComponent(subject)
+               + '&body=' + encodeURIComponent(SAY_TEXT);
+    return {
+      html:
+        '<div class="sayact">'
+        + '<a class="locbtn' + (has ? '' : ' off') + '" href="' + (has ? href : '#') + '">Open this in your email app</a>'
+        + '<button type="button" class="locbtn" onclick="sayCopy(this)">Copy the message</button>'
+        + '<a class="locbtn" href="https://github.com/jbzerrudo/Kalkunahon/issues" target="_blank" rel="noopener">Open an issue on GitHub</a>'
+        + '</div>'
+        + '<div class="rule">' + (has
+            ? 'The buttons carry the text below. <b>Nothing is sent from this page.</b> The first one opens your own email app with the message already written, addressed to <b>jbzerrudo@pagasa.dost.gov.ph</b>, and you press send yourself. If no mail app opens, copy the text and paste it into whatever you use.'
+            : 'Write your message above and the buttons come alive. <b>Nothing is sent from this page.</b> It opens your own email app with the text already written, addressed to <b>jbzerrudo@pagasa.dost.gov.ph</b>, and you press send yourself.')
+        + '</div>'
+        + (has ? '<pre class="saypre">' + esc(SAY_TEXT) + '</pre>' : '')
+    };
+  },
+  src:'Comments go to Jef Zerrudo at <b>jbzerrudo@pagasa.dost.gov.ph</b>. A defect in a number is the most valuable thing you can report: give the card, the inputs you typed and the answer you expected, and it can be checked against the published source the card cites. If you would rather your report be public and trackable, open an issue at github.com/jbzerrudo/Kalkunahon/issues instead. This page uses no server, no account and no analytics, and it does not know that you typed anything until you choose to send it.'
 });
 
 card('ref', {
@@ -3092,34 +3349,36 @@ card('ref', {
         rng(0,'ms'), rng(0,'kmh'), '<span style="font-size:11.5px">'+b.sea+'</span>'];
     })
   )}; },
-  src:'WMO scale, equivalent wind at the standard height of 10 m over open flat terrain, as <b>mean</b> wind and not gusts. The relation v = 0.836·B<sup>1.5</sup> m/s is a curve fit to this table, not an official definition — it lands near the top of each band, so classify from the table.'
+  src:'WMO scale, equivalent wind at the standard height of 10 m over open flat terrain, as <b>mean</b> wind and not gusts. <b>The knot limits are the defining ones; the km/h and m/s columns here are exact conversions of them, not a published table.</b> Publishers round those columns differently, so a printed Beaufort table may show 38 or 41 km/h for the foot of force 6 where the conversion of 22 kt gives 40.7. The relation v = 0.836·B<sup>1.5</sup> m/s is a curve fit to this table, not an official definition — it lands near the top of each band, so classify from the table.'
 });
 
 card('ref', {
   title:'Tropical cyclone scale thresholds',
   span:true,
   compute(){
+    /* Each cell is the band's FLOOR, not a range. Ranges were built as "next floor minus one"
+       in a unit the agency does not publish, which left a 1 km/h hole between every pair of
+       bands on seven of the eight scales and printed a Category 5 floor of 254 km/h where NHC
+       prints 252. A floor cannot be off by one: a band runs from its own floor up to the next. */
+    const UNITS = [['kt','lo',0],['kmh','kmh',0],['ms','ms',1]];
     const rows = [];
     for(const s of M.TC_SCALES){
       s.bands.forEach((b,i)=>{
-        const nxt = s.bands[i+1];
+        const cells = UNITS.map(([unit,key,dp])=>{
+          const own = s.bands.every(x=>x[key]!==undefined);
+          const val = own ? b[key] : M.speedTo(b.lo,'kt',unit);
+          const txt = N(val, dp);
+          return own ? '<b>'+txt+'</b>' : '<span class="conv">'+txt+'</span>';
+        });
         rows.push([
           i===0 ? '<b>'+s.name+'</b><br><span class="chip">'+(s.avg/60)+'-min</span>' : '',
-          b.name,
-          nxt ? (b.lo===0 ? '≤ '+(nxt.lo-1) : b.lo+'–'+(nxt.lo-1)) : '≥ '+b.lo,
-          (function(){
-            const kLo = b.kmh!==undefined ? b.kmh : N(M.speedTo(b.lo,'kt','kmh'),0);
-            if(!nxt) return '≥ '+kLo;
-            const kHi = nxt.kmh!==undefined ? (nxt.kmh-1) : N(M.speedTo(nxt.lo-1,'kt','kmh'),0);
-            return b.lo===0 ? '≤ '+kHi : kLo+'–'+kHi;
-          })()
-        ]);
+          b.name].concat(cells));
       });
     }
-    return {html: tbl([['Scale'],['Class'],['knots',1],['km/h',1]], rows, true)
-      + '<div class="rule">These scales use <b>different averaging periods</b> and are not directly comparable. A 10-minute 64 kt typhoon is roughly a 1-minute 69 kt system; convert with Table 1.2 before comparing.</div>'};
+    return {html: tbl([['Scale'],['Class'],['from kt',1],['from km/h',1],['from m/s',1]], rows, true)
+      + '<div class="rule">Each figure is the <b>floor</b> of that class: the class runs from it up to the floor of the next one. <b>Bold</b> is what the agency itself publishes; grey is an exact conversion of the bold figure, shown for comparison and not an agency number. Where an agency publishes two ladders they are not always exact conversions of each other, so read the bold column that matches how you work. These scales use <b>different averaging periods</b> and are not directly comparable: a 10-minute 64 kt typhoon is roughly a 1-minute 69 kt system, so convert with Table 1.2 first.</div>'};
   },
-  src:'PAGASA thresholds effective 23 March 2022. PAGASA prints the STS lower bound inconsistently (87 vs 89 km/h); the knot values are canonical here because they align exactly with the Typhoon Committee thresholds. BOM knot values are converted from its published km/h figures. IMD from the <i>Mausam</i> journal.'
+  src:'Knots for NHC from nhc.noaa.gov/aboutsshws.php, which also publishes the km/h figures shown. JMA publishes m/s and knots together. PAGASA thresholds effective 23 March 2022, at pagasa.dost.gov.ph; PAGASA prints the STS floor inconsistently (87 km/h against a Tropical Storm class printed as ending at 88), and 89 is used here because it is what the published 48 kt floor converts to and it leaves no overlap. HKO knots from IBTrACS v04r01 Technical Details and km/h from hko.gov.hk. CMA and KMA m/s, and IMD knots, from IBTrACS v04r01 Technical Details. BOM knot values are the ones this table has always carried; BOM publishes its categories in km/h and those figures are not reproduced here because they were not confirmed from a BOM page.'
 });
 
 card('ref', {
@@ -3167,7 +3426,7 @@ card('ref', {
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
-  src:'The calculation engine ships with 123 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+  src:'The calculation engine ships with 274 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
 
 /* =================================================================

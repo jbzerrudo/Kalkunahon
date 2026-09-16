@@ -4,7 +4,8 @@
 [![Licence: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-05687A)](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 An offline meteorological calculator. The published build is a single HTML file: no install,
-no server, no network.
+no server, no account, no analytics. It makes one network request, for the two web fonts, and
+works without it.
 Every result carries the published source it derives from, and values outside a formula's
 stated range are flagged rather than silently returned.
 
@@ -16,10 +17,13 @@ and keep it on a USB stick.
 
 | Module | Contents |
 |---|---|
-| Wind & tropical cyclone | Exact speed unit conversions and Beaufort force; WMO Table 1.2 conversion between 1-minute and 10-minute sustained Vmax; WMO Table 1.1 gust factors; side-by-side classification on the NHC, JMA, PAGASA, BOM and IMD scales at their own averaging periods; Atkinson-Holliday and Knaff-Zehr pressure-wind relationships; u/v components; height adjustment to 10 m; wind power density |
+| Wind & tropical cyclone | Exact speed unit conversions and Beaufort force; WMO Table 1.2 conversion between 1-minute and 10-minute sustained Vmax; WMO Table 1.1 gust factors; side-by-side classification on the NHC, JMA, PAGASA, BOM, HKO, CMA, KMA and IMD scales at their own averaging periods, each compared against the ladder its agency publishes in the unit you select; Atkinson-Holliday and Knaff-Zehr pressure-wind relationships; u/v components; height adjustment to 10 m; wind power density |
 | Moisture & comfort | Humidity solver from temperature plus RH, dewpoint or wet-bulb; vapour pressure, mixing ratio, specific and absolute humidity, virtual temperature, frost point, ice-bulb; heat index, humidex, apparent temperature, wind chill; **UTCI** with mean radiant temperature; **ISO 7243 WBGT** and ISO 7726 radiant temperature from a black globe; **outdoor WBGT by the Liljegren (2008) model** from radiation, wind and sun position, with the **KNMI hittekracht** 0-10 scale and the **ACGIH** work-rest screening limits |
 | Pressure & altitude | Pressure units; station pressure to MSL (QFF); QNH, QFE, QNE and pressure altitude; density altitude and moist air density; ISA state at height; hypsometric equation and thickness |
 | Thermodynamics | Potential, virtual and equivalent potential temperature; dry and saturated adiabatic lapse rates; LCL by Espy's rule and by the Romps (2017) exact solution; Lifted, Showalter, K, Total Totals and SWEAT indices |
+| Sun & day length | Sunrise, sunset, solar noon, civil, nautical and astronomical twilight, and day length, from the same solar position the WBGT model uses; a button fills latitude, longitude, date and UTC offset from the device |
+| Reference | The lookup tables behind the calculators, the constants in use, and a list of what could not be verified against a primary source |
+| Comments & suggestions | Composes a report or a suggestion and hands it to your own email app; nothing is sent from the page |
 
 ## Some things it is careful about
 
@@ -57,12 +61,18 @@ classifying, and refuses to convert where WMO publishes no factor.
 
 ## Accuracy
 
-The calculation engine ships with 177 numerical assertions checked against published worked
+The calculation engine ships with 274 numerical assertions checked against published worked
 examples, including Stull's saturated adiabat (10 C, 70 kPa -> 4.58 K/km), Bolton's equivalent
-potential temperature, Romps' LCL values to sub-metre, the ECCC humidex worked example, NWS
-heat-index chart values, and the ISA tropopause at 226.32 hPa. The UTCI polynomial was checked
-against a reference implementation at 33,420 points across its full validity domain; the
-largest difference was 1.7e-11 °C.
+potential temperature, Romps' LCL values to sub-metre, NWS heat-index chart values, the ISA
+tropopause at 226.32 hPa, and every published tropical cyclone threshold of all eight agencies
+in every unit that agency publishes.
+
+The UTCI is checked in two halves, deliberately. The 210-coefficient polynomial is compared
+against the reference implementation's polynomial, where the largest difference is 1.7e-11 °C.
+The saturation vapour pressure is checked against physics instead, because pythermalcomfort
+4.4.2 computes it with `log1p(T)` where the ITS-90 form needs `log(T)`, and this engine carried
+the same line until v1.4.0. Checking one against the other certified the error. The test now
+asserts that es(0 °C) is the textbook 6.112 hPa, which `log` gives and `log1p` does not.
 
 ```
 node engine/test.js
@@ -91,7 +101,9 @@ icon-192.png           required for the install prompt
 icon-512.png           required for the install prompt
 sw.js                  service worker, so the installed app works with no connection
 engine/core.js         the calculation engine, no dependencies
-engine/test.js         169 assertions against published values
+engine/test.js         274 assertions against published values
+CITATION.cff           citation metadata, also what GitHub's "Cite this repository" reads
+og-card-v2.png         link preview image
 .nojekyll              stops GitHub Pages running Jekyll over the files
 ```
 
@@ -102,19 +114,21 @@ Archived on Zenodo, so it can be cited in a thesis or paper.
 **Concept DOI** [10.5281/zenodo.22070323](https://doi.org/10.5281/zenodo.22070323) always resolves
 to the latest version. Use it when you mean the tool in general.
 
-**Version DOI** [10.5281/zenodo.22070324](https://doi.org/10.5281/zenodo.22070324) points at v1.0.0
-specifically. Use it in a paper, so a reader gets the exact version you used.
+**Version DOI** Each release gets its own, listed on the
+[Zenodo record](https://doi.org/10.5281/zenodo.22070323). Cite the version DOI of the release you
+actually used, so a reader gets that exact version. The example below is v1.4.0; replace the DOI
+with the one shown on Zenodo for your version.
 
-> Zerrudo, J. (2026). *Kalkunahon: an offline meteorological calculator* (version 1.0.0).
-> Zenodo. https://doi.org/10.5281/zenodo.22070324
+> Zerrudo, J. (2026). *Kalkunahon: an offline meteorological calculator* (version 1.4.0).
+> Zenodo. https://doi.org/10.5281/zenodo.22070323
 
 ```bibtex
 @software{zerrudo_kalkunahon_2026,
   author  = {Zerrudo, Jef},
   title   = {Kalkunahon: an offline meteorological calculator},
-  version = {1.0.0},
+  version = {1.4.0},
   year    = {2026},
-  doi     = {10.5281/zenodo.22070324},
+  doi     = {10.5281/zenodo.22070323},
   url     = {https://jbzerrudo.github.io/Kalkunahon/}
 }
 ```
