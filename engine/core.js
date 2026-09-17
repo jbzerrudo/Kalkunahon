@@ -226,7 +226,11 @@ function tcClassifyAll(vKt, inputAvg, exposure, unit){
       /* WMO Table 1.2 covers 1-minute and 10-minute only. Everything else, which is CMA's
          2-minute and IMD's 3-minute, passes through unconverted and must say so. An earlier
          version tested for 180 alone, so CMA's 120 fell through with note = null and the card
-         rendered that as the chip "native". */
+         rendered that as the chip "native".
+         Table 1.1 is NOT the way out. It does carry 120 s and 180 s columns, and the GUST table
+         above holds them, but those are gust factors: the peak tau-second gust inside a longer
+         mean. Harper et al. say mean wind speeds must not be converted between averaging periods
+         using gust factors, only gust speeds. Vmax is a mean, so those columns do not apply. */
       else { note='no WMO factor'; }
     }
     return {scale:s, v:v, band:classify(v, s, unit), note:note};
