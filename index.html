@@ -241,6 +241,11 @@ svg.skewt{width:100%; height:auto; max-width:640px; display:block; margin:.2rem 
 .skewt .sk-tpt{fill:var(--warm)}
 .skewt .sk-tdpt{fill:var(--good)}
 .skewt .sk-lcl{fill:none; stroke:var(--ink); stroke-width:1.6}
+.skewt .sk-lfc{fill:none; stroke:var(--warm); stroke-width:1.8}
+.skewt .sk-cin{fill:var(--cold); fill-opacity:.30; stroke:var(--cold);
+  stroke-width:.8; stroke-opacity:.55}
+.sk-key .sk-keycin{display:inline-block; width:16px; height:9px; border:0; background:var(--cold);
+  opacity:.30; vertical-align:middle; margin-right:.35rem; border-radius:2px}
 .skewt text{fill:var(--ink-3); font-size:10px}
 .skewt .sk-plab{text-anchor:end}
 .skewt .sk-tlab{text-anchor:middle}
@@ -1960,6 +1965,65 @@ function verticalTotals(t850, t500){ return t850 - t500; }
 function crossTotals(td850, t500){ return td850 - t500; }
 
 /* Lift a parcel from (p, T, Td) to a target pressure: dry to LCL then moist. */
+/* --- sounding geometry: LFC and CIN from a list of levels ---------------------------------
+   These need only what lies BELOW the top of the data, so they are computable from mandatory
+   levels in a way CAPE is not: CAPE needs the equilibrium level, which is usually above 500 hPa
+   and therefore above anything a four-level card has been given. */
+/* Environmental temperature between levels, interpolated linearly in ln p, which is how the
+   straight segments on a Skew-T are read. levels is [[p,TC],...] in any order. */
+function envTempAt(levels, p){
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])&&q[0]>0).sort((a,b)=>b[0]-a[0]);
+  if(L.length < 2 || !isNum(p)) return NaN;
+  if(p > L[0][0] || p < L[L.length-1][0]) return NaN;      // no extrapolation, ever
+  for(let i=0;i<L.length-1;i++){
+    const [p1,t1] = L[i], [p2,t2] = L[i+1];
+    if(p <= p1 && p >= p2){
+      if(p1 === p2) return t1;
+      const f = (Math.log(p1)-Math.log(p))/(Math.log(p1)-Math.log(p2));
+      return t1 + f*(t2-t1);
+    }
+  }
+  return NaN;
+}
+/* Level of free convection: the pressure at which a parcel lifted from the surface first becomes
+   warmer than its environment and stays warmer to the top of the data. NaN if that never happens
+   within the levels given, which is a real answer and not a failure. */
+function lfcPressure(levels, ps, tsC, tdsC, step){
+  step = step || 1;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  if(L.length < 2 || !isNum(ps) || !isNum(tsC) || !isNum(tdsC) || tdsC > tsC) return NaN;
+  const pTop = L[L.length-1][0];
+  const buoy = p => liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+  if(!(buoy(pTop) > 0)) return NaN;              // still negatively buoyant at the top: no LFC here
+  let hi = null;                                  // last pressure that is NOT buoyant, coming down
+  for(let p = ps - step; p >= pTop; p -= step){
+    const b = buoy(p);
+    if(isNum(b) && b <= 0) hi = p;
+  }
+  if(hi === null) return ps;                      // buoyant from the surface up
+  let lo = hi, up = hi - step;                    // bracket, then bisect
+  for(let i=0;i<60;i++){
+    const mid = 0.5*(lo+up);
+    if(buoy(mid) > 0) lo = mid; else up = mid;
+    if(Math.abs(lo-up) < 1e-6) break;
+  }
+  return 0.5*(lo+up);
+}
+/* Convective inhibition, J/kg, as the negative area between the surface and the LFC.
+   Returns a negative number, or 0 where the parcel is buoyant from the ground. */
+function cinToLfc(levels, ps, tsC, tdsC, pLfc, steps){
+  if(!isNum(pLfc) || !(pLfc < ps)) return 0;
+  steps = steps || 2000;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  const dl = (Math.log(ps)-Math.log(pLfc))/steps;
+  let s = 0;
+  for(let i=0;i<steps;i++){
+    const p = Math.exp(Math.log(ps) - (i+0.5)*dl);
+    const d = liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+    if(isNum(d)) s += d*dl;
+  }
+  return RD*s;
+}
 function liftParcelTo(p, tC, tdC, pTarget){
   const tK = tC+273.15, tdK = tdC+273.15;
   const pLCL = lclStullPressure(p, tK, tdK);
@@ -2010,7 +2074,7 @@ const API = {
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
   thickness,meanTvFromThickness,airDensity,
   potentialTemp,invPotentialTemp,boltonTL,thetaE,dryLapse,moistLapse,
-  moistLapseDTDP,liftMoist,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
+  moistLapseDTDP,liftMoist,envTempAt,lfcPressure,cinToLfc,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
   kIndex,totalTotals,verticalTotals,crossTotals,liftParcelTo,liftedIndex,
   showalter,sweat,bulkRichardson
 };
@@ -3198,6 +3262,45 @@ const TT_B  = [[56,'scattered severe'],[53,'widely scattered severe'],[51,'isola
 const SW_B  = [[400,'severe, tornadoes possible'],[300,'severe possible'],[-1e9,'non-severe']];
 
 /* =================================================================
+   SAVING A DIAGRAM
+   ================================================================= */
+/* The page styles its SVG with CSS variables, which a saved file cannot resolve. Rather than
+   keeping a duplicate stylesheet in sync, walk the live diagram and copy each element's COMPUTED
+   values onto it, so what is saved is exactly what was on screen, in whichever theme it was in. */
+const SVG_PROPS = ['fill','fill-opacity','stroke','stroke-width','stroke-opacity','stroke-dasharray',
+                   'stroke-linejoin','stroke-linecap','paint-order','font-family','font-size',
+                   'font-weight','text-anchor','letter-spacing','opacity'];
+function svgStandalone(src){
+  const cl = src.cloneNode(true);
+  const a = src.querySelectorAll('*'), b = cl.querySelectorAll('*');
+  for(let i=0;i<a.length && i<b.length;i++){
+    const cs = getComputedStyle(a[i]);
+    let st = '';
+    for(const p of SVG_PROPS){ const v = cs.getPropertyValue(p); if(v) st += p+':'+v+';'; }
+    b[i].setAttribute('style', st);
+    b[i].removeAttribute('class');
+  }
+  cl.removeAttribute('class');
+  cl.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  /* an opaque background, or the file is transparent and a dark-theme export is unreadable
+     on a white page */
+  const vb = (src.getAttribute('viewBox')||'0 0 600 600').split(/\s+/);
+  const panel = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim() || '#ffffff';
+  cl.insertAdjacentHTML('afterbegin',
+    '<rect x="'+vb[0]+'" y="'+vb[1]+'" width="'+vb[2]+'" height="'+vb[3]+'" fill="'+panel+'"/>');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + cl.outerHTML;
+}
+function fileDownload(name, mime, text){
+  const b = new Blob([text], {type:mime}), u = URL.createObjectURL(b);
+  const a = document.createElement('a'); a.href = u; a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u), 4000);
+}
+window.saveSkewT = function(){
+  const s = document.querySelector('#g-thermo svg.skewt');
+  if(s) fileDownload('kalkunahon-skewt.svg','image/svg+xml', svgStandalone(s));
+};
+
+/* =================================================================
    SKEW-T LOG-P
    ================================================================= */
 /* Inline SVG, so the offline build needs no plotting library and the diagram themes with the
@@ -3217,7 +3320,8 @@ function sktCurve(fn, p0, p1, step){
   for(let p=p0; p>=p1-1e-9; p-=step){ const t=fn(p); if(isFinite(t)) pts.push([sktX(t,p), sktY(p)]); }
   return pts;
 }
-function skewTSvg(v){
+function skewTSvg(v, X){
+  X = X || {};
   const S=SKT, W=S.ML+S.W+S.MR, H=S.MT+S.H+S.MB;
   const L=[], LB=[], box='M'+S.ML+' '+S.MT+'h'+S.W+'v'+S.H+'h'+(-S.W)+'Z';
   const put=(d,cls,extra)=>{ if(d) L.push('<path d="'+d+'" class="'+cls+'"'+(extra||'')+'/>'); };
@@ -3293,6 +3397,24 @@ function skewTSvg(v){
   D.push('<path d="'+sktD(env.map(q=>[sktX(q[0],q[1]),sktY(q[1])]))+'" class="sk-t"/>');
   dew.forEach(q=>D.push(mark(q[0],q[1],'sk-tdpt')));
   env.forEach(q=>D.push(mark(q[0],q[1],'sk-tpt')));
+  /* the negative area, surface to LFC. It lies wholly inside the data, so unlike CAPE it can be
+     drawn honestly: parcel up one side, environment back down the other. */
+  if(isFinite(X.lfc) && X.lfc < v.ps && X.levels){
+    const up=[], dn=[];
+    for(let p=v.ps;p>=X.lfc;p-=2){
+      const tp=M.liftParcelTo(v.ps,v.ts,v.tds,p), te=M.envTempAt(X.levels,p);
+      if(isFinite(tp)) up.push([sktX(tp,p),sktY(p)]);
+      if(isFinite(te)) dn.push([sktX(te,p),sktY(p)]);
+    }
+    if(up.length>1 && dn.length>1)
+      D.push('<path d="'+sktD(up)+' '+sktD(dn.reverse()).replace(/^M/,'L')+' Z" class="sk-cin"><title>'
+           + 'convective inhibition, surface to LFC</title></path>');
+    const tl=M.envTempAt(X.levels,X.lfc);
+    if(isFinite(tl)){
+      D.push('<circle cx="'+sktX(tl,X.lfc).toFixed(1)+'" cy="'+sktY(X.lfc).toFixed(1)+'" r="5" class="sk-lfc"/>');
+      D.push('<text x="'+(sktX(tl,X.lfc)+9).toFixed(1)+'" y="'+(sktY(X.lfc)-5).toFixed(1)+'" class="sk-note">LFC '+N(X.lfc,0)+' hPa</text>');
+    }
+  }
   if(isFinite(pLCL)&&pLCL<=S.PBOT&&pLCL>=S.PTOP){
     const tL=M.liftParcelTo(v.ps,v.ts,v.tds,pLCL);
     D.push('<circle cx="'+sktX(tL,pLCL).toFixed(1)+'" cy="'+sktY(pLCL).toFixed(1)+'" r="5" class="sk-lcl"/>');
@@ -3334,7 +3456,12 @@ card('thermo', {
     const sw  = M.sweat(v.td85, tt, v.f85, v.f50, v.d85, v.d50);
     const veer = v.d50 - v.d85;
     const shearOn = v.d85>=130 && v.d85<=250 && v.d50>=210 && v.d50<=310 && veer>0 && v.f85>=15 && v.f50>=15;
-    const chart = skewTSvg(v)
+    /* The LFC and CIN need only what lies below the top of the data, so both are computable
+       here. CAPE is not: it needs the equilibrium level, which is above 500 hPa. */
+    const levels = [[v.ps,v.ts],[850,v.t85],[700,v.t70],[500,v.t50]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
+    const pLfc = M.lfcPressure(levels, v.ps, v.ts, v.tds);
+    const cin  = M.cinToLfc(levels, v.ps, v.ts, v.tds, pLfc);
+    const chart = skewTSvg(v, {levels: levels, lfc: pLfc})
       + '<div class="sk-key">'
       + '<span><i style="border-color:var(--warm)"></i>temperature</span>'
       + '<span><i style="border-color:var(--good)"></i>dewpoint</span>'
@@ -3342,15 +3469,27 @@ card('thermo', {
       + '<span><i style="border-color:var(--warn-line)"></i>dry adiabats</span>'
       + '<span><i style="border-color:var(--good); opacity:.5"></i>saturated adiabats</span>'
       + '<span><i style="border-color:var(--cold); border-top-style:dashed"></i>mixing ratio g/kg</span>'
+      + (isFinite(pLfc) ? '<span><i class="sk-keycin"></i>convective inhibition</span>' : '')
+      + '</div>'
+      + '<div class="sayact" style="justify-content:center"><button type="button" class="locbtn" onclick="saveSkewT()">Download the diagram as SVG</button></div>'
+      + '<div class="out">'
+      + '<div class="r"><span class="k">level of free convection</span><span class="v">'
+      + (isFinite(pLfc) ? N(pLfc,0) : '—') + '</span><span class="u">hPa</span></div>'
+      + '<div class="r"><span class="k">convective inhibition</span><span class="v">'
+      + (isFinite(pLfc) ? N(cin,0) : '—') + '</span><span class="u">J/kg</span></div>'
       + '</div>'
       + '<div class="rule"><b>This is drawn from the four levels above, not from a sounding.</b> Joining them with '
       + 'straight segments is what the diagram can do with four points; a real ascent is not a straight line between '
       + 'mandatory levels, and any structure in between, an inversion, a dry layer, is invisible here because it was '
-      + 'never entered. <b>No CAPE, no LFC and no equilibrium level are shown</b>, deliberately: there is nothing above '
-      + '500 hPa to close the positive area against, and a number computed from four points would look authoritative '
-      + 'and mean very little. The dashed parcel is lifted from the surface, dry-adiabatically to its LCL and along a '
+      + 'never entered. The dashed parcel is lifted from the surface, dry-adiabatically to its LCL and along a '
       + 'saturated adiabat above it, which is the same parcel the Lifted Index uses, so you can see on the diagram '
-      + 'where that index comes from.</div>';
+      + 'where that index comes from.<br><br><b>The LFC and the inhibition are shown; CAPE and the equilibrium level '
+      + 'are not.</b> That is not caution, it is what the data can reach. The negative area closes at the LFC, which '
+      + 'lies inside the levels you entered, so it can be drawn and integrated. The positive area has no top: at '
+      + '500 hPa, the highest level this card has, the parcel is normally still warmer than its environment and '
+      + 'climbing, and most of the area sits above that. Printing a CAPE from what is visible would understate a '
+      + 'dangerous sounding severalfold and look precise doing it. <b>Add a 300 hPa and a 200 hPa temperature and '
+      + 'both become computable</b>, since the parcel curve already runs to 100 hPa.</div>';
     const r = (k,val,d,b)=>'<tr><td>'+k+'</td><td class="num">'+N(val,d)+'</td><td>'+b+'</td></tr>';
     return {
       html: chart + '<div class="scroll"><table><thead><tr><th>Index</th><th class="num">Value</th><th>Interpretation</th></tr></thead><tbody>'+
@@ -4001,20 +4140,11 @@ function roseRender(){
 window.roseSave=function(kind){
   const L=window.ROSE_LAST; if(!L) return;
   const stem=(RS.name||'windrose').replace(/\.[^.]*$/,'');
-  if(kind==='csv') return roseDownload(stem+'-windrose.csv','text/csv',roseFreqCsv(L.c,L.o));
-  const svg=document.querySelector('#ro-out svg.rose'); if(!svg) return;
-  const cl=svg.cloneNode(true), cs=getComputedStyle(document.documentElement);
-  /* inline the tokens the stylesheet supplies, so the saved file stands alone */
-  const st='<style>text{font-family:monospace}.ro-ring,.ro-spoke{fill:none;stroke:'+cs.getPropertyValue('--line-2').trim()+';stroke-width:.8}'
-    +'.ro-seg{stroke:'+cs.getPropertyValue('--panel').trim()+';stroke-width:2}'
-    +'.ro-hole{fill:'+cs.getPropertyValue('--panel').trim()+';stroke:'+cs.getPropertyValue('--line').trim()+'}'
-    +'.ro-calm{font-size:13px;font-weight:600;text-anchor:middle;fill:'+cs.getPropertyValue('--ink').trim()+'}'
-    +'.ro-calmlab,.ro-ringlab{font-size:9px;text-anchor:middle;fill:'+cs.getPropertyValue('--ink-3').trim()+'}'
-    +'.ro-ringlab{text-anchor:start}.ro-pt{font-size:11px;text-anchor:middle;fill:'+cs.getPropertyValue('--ink-2').trim()+'}</style>';
-  cl.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  cl.insertAdjacentHTML('afterbegin', st);
-  roseDownload(stem+'-windrose.svg','image/svg+xml','<?xml version="1.0" encoding="UTF-8"?>\n'+cl.outerHTML);
+  if(kind==='csv') return fileDownload(stem+'-windrose.csv','text/csv',roseFreqCsv(L.c,L.o));
+  const svg=document.querySelector('#ro-out svg.rose');
+  if(svg) fileDownload(stem+'-windrose.svg','image/svg+xml', svgStandalone(svg));
 };
+
 function roseInit(){
   const host=document.getElementById('rose-panel'); if(!host) return;
   host.innerHTML =

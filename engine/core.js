@@ -1414,6 +1414,65 @@ function verticalTotals(t850, t500){ return t850 - t500; }
 function crossTotals(td850, t500){ return td850 - t500; }
 
 /* Lift a parcel from (p, T, Td) to a target pressure: dry to LCL then moist. */
+/* --- sounding geometry: LFC and CIN from a list of levels ---------------------------------
+   These need only what lies BELOW the top of the data, so they are computable from mandatory
+   levels in a way CAPE is not: CAPE needs the equilibrium level, which is usually above 500 hPa
+   and therefore above anything a four-level card has been given. */
+/* Environmental temperature between levels, interpolated linearly in ln p, which is how the
+   straight segments on a Skew-T are read. levels is [[p,TC],...] in any order. */
+function envTempAt(levels, p){
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])&&q[0]>0).sort((a,b)=>b[0]-a[0]);
+  if(L.length < 2 || !isNum(p)) return NaN;
+  if(p > L[0][0] || p < L[L.length-1][0]) return NaN;      // no extrapolation, ever
+  for(let i=0;i<L.length-1;i++){
+    const [p1,t1] = L[i], [p2,t2] = L[i+1];
+    if(p <= p1 && p >= p2){
+      if(p1 === p2) return t1;
+      const f = (Math.log(p1)-Math.log(p))/(Math.log(p1)-Math.log(p2));
+      return t1 + f*(t2-t1);
+    }
+  }
+  return NaN;
+}
+/* Level of free convection: the pressure at which a parcel lifted from the surface first becomes
+   warmer than its environment and stays warmer to the top of the data. NaN if that never happens
+   within the levels given, which is a real answer and not a failure. */
+function lfcPressure(levels, ps, tsC, tdsC, step){
+  step = step || 1;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  if(L.length < 2 || !isNum(ps) || !isNum(tsC) || !isNum(tdsC) || tdsC > tsC) return NaN;
+  const pTop = L[L.length-1][0];
+  const buoy = p => liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+  if(!(buoy(pTop) > 0)) return NaN;              // still negatively buoyant at the top: no LFC here
+  let hi = null;                                  // last pressure that is NOT buoyant, coming down
+  for(let p = ps - step; p >= pTop; p -= step){
+    const b = buoy(p);
+    if(isNum(b) && b <= 0) hi = p;
+  }
+  if(hi === null) return ps;                      // buoyant from the surface up
+  let lo = hi, up = hi - step;                    // bracket, then bisect
+  for(let i=0;i<60;i++){
+    const mid = 0.5*(lo+up);
+    if(buoy(mid) > 0) lo = mid; else up = mid;
+    if(Math.abs(lo-up) < 1e-6) break;
+  }
+  return 0.5*(lo+up);
+}
+/* Convective inhibition, J/kg, as the negative area between the surface and the LFC.
+   Returns a negative number, or 0 where the parcel is buoyant from the ground. */
+function cinToLfc(levels, ps, tsC, tdsC, pLfc, steps){
+  if(!isNum(pLfc) || !(pLfc < ps)) return 0;
+  steps = steps || 2000;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  const dl = (Math.log(ps)-Math.log(pLfc))/steps;
+  let s = 0;
+  for(let i=0;i<steps;i++){
+    const p = Math.exp(Math.log(ps) - (i+0.5)*dl);
+    const d = liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+    if(isNum(d)) s += d*dl;
+  }
+  return RD*s;
+}
 function liftParcelTo(p, tC, tdC, pTarget){
   const tK = tC+273.15, tdK = tdC+273.15;
   const pLCL = lclStullPressure(p, tK, tdK);
@@ -1464,7 +1523,7 @@ const API = {
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
   thickness,meanTvFromThickness,airDensity,
   potentialTemp,invPotentialTemp,boltonTL,thetaE,dryLapse,moistLapse,
-  moistLapseDTDP,liftMoist,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
+  moistLapseDTDP,liftMoist,envTempAt,lfcPressure,cinToLfc,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
   kIndex,totalTotals,verticalTotals,crossTotals,liftParcelTo,liftedIndex,
   showalter,sweat,bulkRichardson
 };
