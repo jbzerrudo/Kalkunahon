@@ -20,7 +20,8 @@ and keep it on a USB stick.
 | Wind & tropical cyclone | Exact speed unit conversions and Beaufort force; WMO Table 1.2 conversion between 1-minute and 10-minute sustained Vmax; WMO Table 1.1 gust factors; side-by-side classification on the NHC, JMA, PAGASA, BOM, HKO, CMA, KMA and IMD scales at their own averaging periods, each compared against the ladder its agency publishes in the unit you select; Atkinson-Holliday and Knaff-Zehr pressure-wind relationships; u/v components; height adjustment to 10 m; wind power density |
 | Moisture & comfort | Humidity solver from temperature plus RH, dewpoint or wet-bulb; vapour pressure, mixing ratio, specific and absolute humidity, virtual temperature, frost point, ice-bulb; heat index, humidex, apparent temperature, wind chill; **UTCI** with mean radiant temperature; **ISO 7243 WBGT** and ISO 7726 radiant temperature from a black globe; **outdoor WBGT by the Liljegren (2008) model** from radiation, wind and sun position, with the **KNMI hittekracht** 0-10 scale and the **ACGIH** work-rest screening limits |
 | Pressure & altitude | Pressure units; station pressure to MSL (QFF); QNH, QFE, QNE and pressure altitude; density altitude and moist air density; ISA state at height; hypsometric equation and thickness |
-| Thermodynamics | Potential, virtual and equivalent potential temperature; dry and saturated adiabatic lapse rates; LCL by Espy's rule and by the Romps (2017) exact solution; Lifted, Showalter, K, Total Totals and SWEAT indices |
+| Thermodynamics | Potential, virtual and equivalent potential temperature; dry and saturated adiabatic lapse rates; LCL by Espy's rule and by the Romps (2017) exact solution; Lifted, Showalter, K, Total Totals and SWEAT indices; a **Skew-T log-P diagram** drawn from the entered levels, with isotherms, dry and saturated adiabats, mixing-ratio lines and the surface parcel path |
+| Wind rose | Loads a CSV of speed and direction in the browser and draws the rose: 8, 16 or 36 sectors centred on the compass point, editable speed bins defaulting to the Beaufort boundaries, calms counted separately in the centre rather than folded into north, filtering by year, month and hour where the file has a readable date, and downloads of the diagram as SVG and the frequency table as CSV |
 | Sun & day length | Sunrise, sunset, solar noon, civil, nautical and astronomical twilight, and day length, from the same solar position the WBGT model uses; a button fills latitude, longitude, date and UTC offset from the device |
 | Reference | The lookup tables behind the calculators, the constants in use, and a list of what could not be verified against a primary source |
 | Comments & suggestions | Composes a report or a suggestion and hands it to your own email app; nothing is sent from the page |
@@ -61,7 +62,7 @@ classifying, and refuses to convert where WMO publishes no factor.
 
 ## Accuracy
 
-The calculation engine ships with 298 numerical assertions checked against published worked
+The calculation engine ships with 316 numerical assertions checked against published worked
 examples, including Stull's saturated adiabat (10 C, 70 kPa -> 4.58 K/km), Bolton's equivalent
 potential temperature, Romps' LCL values to sub-metre, NWS heat-index chart values, the ISA
 tropopause at 226.32 hPa, and every published tropical cyclone threshold of all eight agencies
@@ -135,7 +136,7 @@ icon-192.png           required for the install prompt
 icon-512.png           required for the install prompt
 sw.js                  service worker, so the installed app works with no connection
 engine/core.js         the calculation engine, no dependencies
-engine/test.js         298 assertions against published values
+engine/test.js         316 assertions against published values
 CITATION.cff           citation metadata, also what GitHub's "Cite this repository" reads
 og-card-v2.png         link preview image
 .nojekyll              stops GitHub Pages running Jekyll over the files

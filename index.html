@@ -204,6 +204,53 @@ input.off,select.off{opacity:.4; cursor:not-allowed}
   letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+svg.rose{width:100%; height:auto; max-width:520px; display:block; margin:.4rem auto .2rem;
+  font-family:'IBM Plex Mono',monospace}
+.rose .ro-ring,.rose .ro-spoke{fill:none; stroke:var(--line-2); stroke-width:.8}
+.rose .ro-seg{stroke:var(--panel); stroke-width:2}
+.rose .ro-hole{fill:var(--panel); stroke:var(--line); stroke-width:1}
+.rose .ro-calm{font-size:13px; font-weight:600; text-anchor:middle; fill:var(--ink)}
+.rose .ro-calmlab{font-size:9px; text-anchor:middle; fill:var(--ink-3); letter-spacing:.08em}
+.rose .ro-ringlab{font-size:9px; fill:var(--ink-3); stroke:var(--panel); stroke-width:2.6;
+  paint-order:stroke fill; stroke-linejoin:round}
+.rose .ro-pt{font-size:11px; text-anchor:middle; fill:var(--ink-2)}
+.ro-key{display:flex; gap:.45rem 1rem; flex-wrap:wrap; justify-content:center; align-items:center;
+  margin:.1rem 0 .9rem; font-size:10.5px; color:var(--ink-3)}
+.ro-key i{display:inline-block; width:13px; height:13px; border-radius:2px; vertical-align:-2px;
+  margin-right:.35rem; border:1px solid var(--line)}
+.ro-key .ro-keycalm{background:var(--panel)}
+.ro-keyunit{font-family:'IBM Plex Mono',monospace; color:var(--ink-2)}
+.ro-tab{margin-top:.7rem; font-size:11.5px; color:var(--ink-3)}
+.ro-tab summary{cursor:pointer; letter-spacing:.08em; text-transform:uppercase; font-size:10px}
+.ro-tab pre{font-family:'IBM Plex Mono',monospace; font-size:10.5px; line-height:1.5; margin:.5rem 0 0}
+#ro-file{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-2)}
+svg.skewt{width:100%; height:auto; max-width:640px; display:block; margin:.2rem auto .4rem;
+  font-family:'IBM Plex Mono',monospace}
+.skewt path{fill:none; vector-effect:non-scaling-stroke}
+.skewt .sk-iso{stroke:var(--ink-3); stroke-width:.6; stroke-opacity:.30}
+.skewt .sk-iso0{stroke:var(--cold); stroke-width:1; stroke-opacity:.55}
+.skewt .sk-dry{stroke:var(--warn); stroke-width:.6; stroke-opacity:.30}
+.skewt .sk-wet{stroke:var(--good); stroke-width:.7; stroke-opacity:.40}
+.skewt .sk-mix{stroke:var(--cold); stroke-width:.7; stroke-opacity:.45; stroke-dasharray:3 3}
+.skewt .sk-p{stroke:var(--line); stroke-width:.9}
+.skewt .sk-pmin{stroke:var(--line-2); stroke-width:.5}
+.skewt .sk-box{stroke:var(--ink-3); stroke-width:1.1}
+.skewt .sk-t{stroke:var(--warm); stroke-width:2.6; stroke-linejoin:round}
+.skewt .sk-td{stroke:var(--good); stroke-width:2.6; stroke-linejoin:round}
+.skewt .sk-parcel{stroke:var(--ink); stroke-width:1.6; stroke-dasharray:5 4}
+.skewt .sk-tpt{fill:var(--warm)}
+.skewt .sk-tdpt{fill:var(--good)}
+.skewt .sk-lcl{fill:none; stroke:var(--ink); stroke-width:1.6}
+.skewt text{fill:var(--ink-3); font-size:10px}
+.skewt .sk-plab{text-anchor:end}
+.skewt .sk-tlab{text-anchor:middle}
+.skewt .sk-mixlab{text-anchor:middle; fill:var(--cold); fill-opacity:.85; font-size:9px}
+.skewt .sk-note{fill:var(--ink); font-size:10px}
+.skewt .sk-axis{fill:var(--ink-3); font-size:10px; text-anchor:middle; letter-spacing:.08em; text-transform:uppercase}
+.sk-key{display:flex; gap:1.1rem; flex-wrap:wrap; justify-content:center; margin:.1rem 0 .6rem;
+  font-size:10.5px; color:var(--ink-3)}
+.sk-key i{display:inline-block; width:16px; height:0; border-top-width:2.6px; border-top-style:solid;
+  vertical-align:middle; margin-right:.35rem}
 input[type=time]{
   font-family:'IBM Plex Mono',monospace; font-size:14px; padding:.42rem .5rem;
   color:var(--ink); background:var(--panel-2); border:1px solid var(--line);
@@ -401,6 +448,15 @@ tr:last-child td{border-bottom:0}
       <div class="grid" id="g-sun"></div>
     </section>
 
+    <section class="mod" id="m-rose">
+      <div class="mod-head">
+        <h2>Wind rose</h2>
+        <p>Load a CSV of wind speed and direction and get the rose, the frequency table behind it,
+           and the counts of everything that was left out and why. The file is read in this
+           browser and never leaves the machine.</p>
+      </div>
+      <div class="grid wide" id="rose-panel"></div>
+    </section>
     <section class="mod" id="m-say">
       <div class="mod-head">
         <h2>Comments and suggestions</h2>
@@ -748,6 +804,17 @@ function kz07WindFromP(pc, penv, lat, c, S){
 }
 
 /* --- 1.7 Vector components. Meteorological direction = FROM. --- */
+/* Which sector of a wind rose a direction falls in. Sectors are CENTRED on the compass point,
+   so with 16 of them north spans 348.75 to 11.25 degrees and not 0 to 22.5; putting the boundary
+   at 0 instead of at half a sector rotates the whole rose by half a sector, which is the classic
+   way to get a wind rose subtly and confidently wrong. Returns 0..n-1 counting clockwise from
+   north, or NaN for something that is not a direction. */
+function windSector(dirDeg, n){
+  if(!isNum(dirDeg) || !isNum(n) || n < 2) return NaN;
+  if(dirDeg < 0 || dirDeg > 360) return NaN;
+  const w = 360/n;
+  return ((Math.round((dirDeg % 360)/w) % n) + n) % n;
+}
 function uvFromSpeedDir(v, dirDeg){
   const r = dirDeg*Math.PI/180;
   return {u: -v*Math.sin(r), v: -v*Math.cos(r)};
@@ -1930,7 +1997,7 @@ const API = {
   EXPOSURES,EXPOSURE_LABEL,K_VMAX,K_LEGACY,vmax1to10,vmax10to1,GUST,gustFactor,
   TC_SCALES,classify,tcClassifyAll,
   ah77WindFromP,ah77PFromWind,kz07PFromWind,kz07WindFromP,
-  uvFromSpeedDir,speedDirFromUV,Z0,logProfile,powerLaw,windPowerDensity,
+  uvFromSpeedDir,speedDirFromUV,windSector,Z0,logProfile,powerLaw,windPowerDensity,
   esWater,esIce,esBolton,dewpointFromRH,rhFromDewpoint,frostpointFromRHi,
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
   absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,rhFromWetBulb,iceBulbPsychro,heatIndexF,windChillC,
@@ -1970,6 +2037,7 @@ const MODULES = [
   {id:'thermo', label:'Thermodynamics'},
   {id:'sun',    label:'Sun &amp; day length'},
   {id:'ref',    label:'Reference'},
+  {id:'rose',   label:'Wind rose'},
   {id:'say',    label:'Comments &amp; suggestions'}
 ];
 const SPEED_OPTS = [['kt','knots'],['kmh','km/h'],['ms','m/s'],['mph','mph'],['fts','ft/s']];
@@ -3129,6 +3197,116 @@ const KI_B  = [[40,'high potential'],[26,'moderate potential'],[15,'small potent
 const TT_B  = [[56,'scattered severe'],[53,'widely scattered severe'],[51,'isolated severe'],[44,'convection likely'],[-1e9,'convection not likely']];
 const SW_B  = [[400,'severe, tornadoes possible'],[300,'severe possible'],[-1e9,'non-severe']];
 
+/* =================================================================
+   SKEW-T LOG-P
+   ================================================================= */
+/* Inline SVG, so the offline build needs no plotting library and the diagram themes with the
+   rest of the page. The construction is the usual one: pressure on a logarithmic vertical axis
+   and isotherms sheared to the right with height, which is the whole point of the diagram. It
+   makes the dry adiabats and the isotherms nearly orthogonal, so an ordinary tropospheric lapse
+   rate reads as a slope rather than as a line that is almost vertical.
+   Everything is clipped to the plot box, so lines that run off the top right simply leave. */
+const SKT = {W:520, H:600, ML:44, MR:66, MT:14, MB:34, PTOP:100, PBOT:1050,
+             TMIN:-50, TMAX:40, SKEW:0.42};
+const sktY = p => SKT.MT + Math.log(SKT.PTOP/p)/Math.log(SKT.PTOP/SKT.PBOT)*SKT.H;
+const sktX = (t,p) => SKT.ML + ((t-SKT.TMIN)/(SKT.TMAX-SKT.TMIN))*SKT.W + SKT.SKEW*(SKT.MT+SKT.H-sktY(p));
+const sktD = pts => pts.length ? pts.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join(' ') : '';
+/* sample a curve T(p) from p0 up to p1 */
+function sktCurve(fn, p0, p1, step){
+  const pts=[];
+  for(let p=p0; p>=p1-1e-9; p-=step){ const t=fn(p); if(isFinite(t)) pts.push([sktX(t,p), sktY(p)]); }
+  return pts;
+}
+function skewTSvg(v){
+  const S=SKT, W=S.ML+S.W+S.MR, H=S.MT+S.H+S.MB;
+  const L=[], LB=[], box='M'+S.ML+' '+S.MT+'h'+S.W+'v'+S.H+'h'+(-S.W)+'Z';
+  const put=(d,cls,extra)=>{ if(d) L.push('<path d="'+d+'" class="'+cls+'"'+(extra||'')+'/>'); };
+
+  /* isotherms, every 10 C, drawn wide enough that the sheared box stays full */
+  for(let t=-140;t<=60;t+=10)
+    put(sktD([[sktX(t,S.PBOT),sktY(S.PBOT)],[sktX(t,S.PTOP),sktY(S.PTOP)]]),
+        (t===0?'sk-iso0':'sk-iso'));
+
+  /* dry adiabats: T = theta (p/1000)^kappa */
+  for(let th=-40;th<=240;th+=10)
+    put(sktD(sktCurve(p=>M.invPotentialTemp(th+273.15,p)-273.15, S.PBOT, S.PTOP, 10)),'sk-dry');
+
+  /* saturated (pseudo) adiabats, integrated with the engine's RK4 */
+  for(let t0=-40;t0<=44;t0+=4){
+    const pts=[]; let T=t0+273.15, p=1000;
+    if(t0>=-40){
+      for(; p>=S.PTOP-1e-9; p-=10){
+        if(p<=S.PBOT){ const x=sktX(T-273.15,p); if(isFinite(x)) pts.push([x,sktY(p)]); }
+        const Tn=M.liftMoist(T,p,p-10,4); if(!isFinite(Tn)) break; T=Tn;
+      }
+    }
+    put(sktD(pts),'sk-wet');
+  }
+
+  /* saturation mixing-ratio lines, g/kg */
+  [0.4,1,2,4,7,10,16,24,32].forEach(wg=>{
+    const w=wg/1000;
+    const pts=[];
+    for(let p=S.PBOT;p>=500;p-=10){
+      const e=w*p/(M.EPS+w);                       // hPa
+      const t=243.12*Math.log(e/6.112)/(17.62-Math.log(e/6.112));   // invert the engine's Magnus
+      if(isFinite(t)) pts.push([sktX(t,p), sktY(p)]);
+    }
+    put(sktD(pts),'sk-mix');
+    if(pts.length){ const q=pts[pts.length-1];
+      L.push('<text x="'+q[0].toFixed(1)+'" y="'+(q[1]-3).toFixed(1)+'" class="sk-mixlab">'+wg+'</text>'); }
+  });
+
+  /* isobars */
+  const PB=[1000,850,700,500,400,300,250,200,150,100], PBm=[950,900,800,600];
+  PBm.forEach(p=>put('M'+S.ML+' '+sktY(p).toFixed(1)+'h'+S.W,'sk-pmin'));
+  PB.forEach(p=>{ put('M'+S.ML+' '+sktY(p).toFixed(1)+'h'+S.W,'sk-p');
+    LB.push('<text x="'+(S.ML-6)+'" y="'+(sktY(p)+3.5).toFixed(1)+'" class="sk-plab">'+p+'</text>'); });
+
+  /* temperature labels along the foot */
+  for(let t=-40;t<=40;t+=10){ const x=sktX(t,S.PBOT);
+    if(x>=S.ML-2 && x<=S.ML+S.W+2)
+      LB.push('<text x="'+x.toFixed(1)+'" y="'+(S.MT+S.H+15)+'" class="sk-tlab">'+t+'</text>'); }
+
+  const out=[];
+  out.push('<svg viewBox="0 0 '+W+' '+H+'" class="skewt" role="img" aria-label="Skew-T log-P diagram">');
+  out.push('<defs><clipPath id="sktclip"><rect x="'+S.ML+'" y="'+S.MT+'" width="'+S.W+'" height="'+S.H+'"/></clipPath></defs>');
+  out.push('<g clip-path="url(#sktclip)">'+L.join('')+'</g>');
+
+  /* ---- the sounding itself ---- */
+  const env=[[v.ts,v.ps],[v.t85,850],[v.t70,700],[v.t50,500]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
+  const dew=[[v.tds,v.ps],[v.td85,850],[v.td70,700]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
+  const D=[];
+  const mark=(t,p,cls)=>'<circle cx="'+sktX(t,p).toFixed(1)+'" cy="'+sktY(p).toFixed(1)+'" r="3.4" class="'+cls+'"/>';
+
+  /* parcel: dry adiabat to the LCL, saturated above */
+  let pLCL=NaN, parcel=[];
+  if(isFinite(v.ps)&&isFinite(v.ts)&&isFinite(v.tds)&&v.tds<=v.ts){
+    pLCL = M.lclStullPressure(v.ps, v.ts+273.15, v.tds+273.15);
+    for(let p=v.ps;p>=S.PTOP;p-=5){
+      const t=M.liftParcelTo(v.ps,v.ts,v.tds,p);
+      if(isFinite(t)) parcel.push([sktX(t,p), sktY(p)]);
+    }
+  }
+  D.push('<path d="'+sktD(parcel)+'" class="sk-parcel"/>');
+  D.push('<path d="'+sktD(dew.map(q=>[sktX(q[0],q[1]),sktY(q[1])]))+'" class="sk-td"/>');
+  D.push('<path d="'+sktD(env.map(q=>[sktX(q[0],q[1]),sktY(q[1])]))+'" class="sk-t"/>');
+  dew.forEach(q=>D.push(mark(q[0],q[1],'sk-tdpt')));
+  env.forEach(q=>D.push(mark(q[0],q[1],'sk-tpt')));
+  if(isFinite(pLCL)&&pLCL<=S.PBOT&&pLCL>=S.PTOP){
+    const tL=M.liftParcelTo(v.ps,v.ts,v.tds,pLCL);
+    D.push('<circle cx="'+sktX(tL,pLCL).toFixed(1)+'" cy="'+sktY(pLCL).toFixed(1)+'" r="5" class="sk-lcl"/>');
+    D.push('<text x="'+(sktX(tL,pLCL)+9).toFixed(1)+'" y="'+(sktY(pLCL)+4).toFixed(1)+'" class="sk-note">LCL '+N(pLCL,0)+' hPa</text>');
+  }
+  out.push('<g clip-path="url(#sktclip)">'+D.join('')+'</g>');
+  out.push('<path d="'+box+'" class="sk-box"/>');
+  out.push(LB.join(''));
+  out.push('<text x="'+(S.ML+S.W/2)+'" y="'+(S.MT+S.H+29)+'" class="sk-axis">temperature °C</text>');
+  out.push('<text transform="translate(11,'+(S.MT+S.H/2)+') rotate(-90)" class="sk-axis">pressure hPa</text>');
+  out.push('</svg>');
+  return out.join('');
+}
+
 card('thermo', {
   title:'Stability indices',
   span:true,
@@ -3156,9 +3334,26 @@ card('thermo', {
     const sw  = M.sweat(v.td85, tt, v.f85, v.f50, v.d85, v.d50);
     const veer = v.d50 - v.d85;
     const shearOn = v.d85>=130 && v.d85<=250 && v.d50>=210 && v.d50<=310 && veer>0 && v.f85>=15 && v.f50>=15;
+    const chart = skewTSvg(v)
+      + '<div class="sk-key">'
+      + '<span><i style="border-color:var(--warm)"></i>temperature</span>'
+      + '<span><i style="border-color:var(--good)"></i>dewpoint</span>'
+      + '<span><i style="border-color:var(--ink); border-top-style:dashed"></i>surface parcel</span>'
+      + '<span><i style="border-color:var(--warn-line)"></i>dry adiabats</span>'
+      + '<span><i style="border-color:var(--good); opacity:.5"></i>saturated adiabats</span>'
+      + '<span><i style="border-color:var(--cold); border-top-style:dashed"></i>mixing ratio g/kg</span>'
+      + '</div>'
+      + '<div class="rule"><b>This is drawn from the four levels above, not from a sounding.</b> Joining them with '
+      + 'straight segments is what the diagram can do with four points; a real ascent is not a straight line between '
+      + 'mandatory levels, and any structure in between, an inversion, a dry layer, is invisible here because it was '
+      + 'never entered. <b>No CAPE, no LFC and no equilibrium level are shown</b>, deliberately: there is nothing above '
+      + '500 hPa to close the positive area against, and a number computed from four points would look authoritative '
+      + 'and mean very little. The dashed parcel is lifted from the surface, dry-adiabatically to its LCL and along a '
+      + 'saturated adiabat above it, which is the same parcel the Lifted Index uses, so you can see on the diagram '
+      + 'where that index comes from.</div>';
     const r = (k,val,d,b)=>'<tr><td>'+k+'</td><td class="num">'+N(val,d)+'</td><td>'+b+'</td></tr>';
     return {
-      html:'<div class="scroll"><table><thead><tr><th>Index</th><th class="num">Value</th><th>Interpretation</th></tr></thead><tbody>'+
+      html: chart + '<div class="scroll"><table><thead><tr><th>Index</th><th class="num">Value</th><th>Interpretation</th></tr></thead><tbody>'+
         r('Lifted Index (surface parcel)', li, 1, band(li,LI_B))+
         r('Showalter Stability Index', ssi, 1, band(ssi,SSI_B))+
         r('K-Index', ki, 1, band(ki,KI_B))+
@@ -3510,7 +3705,7 @@ card('ref', {
      ['Bolton (1980) primary PDF','Not accessible. All coefficients verified against four independent implementations that cite his equation numbers, plus numerical self-consistency checks.']])+
     '</div>'};
   },
-  src:'The calculation engine ships with 298 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
+  src:'The calculation engine ships with 316 numerical assertions run against published worked examples — Stull’s 4.58 K/km saturated adiabat, Bolton’s &theta;<sub>e</sub> cross-checks, Romps’ LCL values to sub-metre, ECCC’s humidex worked example, NWS heat-index chart values, and the ISA tropopause at 226.32 hPa.'
 });
 
 /* =================================================================
@@ -3582,6 +3777,300 @@ function moduleLocate(mod, label){
   });
 }
 moduleLocate('moist', 'Use phone GPS and the time now');
+roseInit();
+
+/* =================================================================
+   WIND ROSE
+   ================================================================= */
+/* Reads a CSV in the browser with FileReader and draws with inline SVG, so the whole module
+   works with the network off and nothing ever leaves the machine.
+   Two conventions decide whether a wind rose is right or quietly wrong, and both are easy to
+   get wrong by half a sector:
+   - direction is the direction the wind blows FROM, and sectors are CENTRED on the compass
+     point, so with 16 sectors N spans 348.75 to 11.25 degrees, not 0 to 22.5;
+   - a calm has no direction. Calms are counted separately and shown in the middle. Folding them
+     into the north sector, which many spreadsheets do by treating dd = 0 as north, invents a
+     prevailing wind out of still air. */
+const ROSE_RAMP_LIGHT = ['#7FB8C9','#579FB6','#3288A3','#146F8A','#065A70','#064757','#053540'];
+const ROSE_RAMP_DARK  = ['#155368','#1B6A83','#2B85A0','#4AA0BA','#6FBBCF','#9AD3E0','#C6E8F0'];
+const ROSE_MAXBINS = 7;
+const RS = {rows:[], head:[], name:'', sp:-1, di:-1, dt:-1, dt2:-1, parsed:0, badTime:0};
+
+function roseRamp(){
+  const dark = getComputedStyle(document.documentElement).getPropertyValue('--panel').trim().toLowerCase();
+  return (dark && parseInt(dark.slice(1,3),16) < 128) ? ROSE_RAMP_DARK : ROSE_RAMP_LIGHT;
+}
+/* --- CSV --- */
+function roseSplit(line, d){
+  const out=[]; let cur='', q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(q){ if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===d){ out.push(cur); cur=''; }
+    else cur+=c;
+  }
+  out.push(cur); return out.map(s=>s.trim());
+}
+function roseGuess(head, kind){
+  const K={sp:/^(ff|ws|wspd|wind_?speed|speed|spd|vel|velocity|sknt|wind)$/i,
+           di:/^(dd|wd|wdir|wind_?dir(ection)?|dir|direction|drct)$/i,
+           dt:/^(date|datetime|date_?time|timestamp|time|obs|valid|when|dt)$/i};
+  for(let i=0;i<head.length;i++) if(K[kind].test(head[i])) return i;
+  for(let i=0;i<head.length;i++) if(new RegExp(kind==='sp'?'speed':kind==='di'?'dir':'date|time','i').test(head[i])) return i;
+  return -1;
+}
+function roseLoad(text, name){
+  const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.trim().length);
+  if(!lines.length) return 'The file is empty.';
+  const d = [',',';','\t','|'].map(c=>[c,(lines[0].match(new RegExp('\\'+c,'g'))||[]).length])
+                              .sort((a,b)=>b[1]-a[1])[0][0];
+  const first = roseSplit(lines[0], d);
+  const numeric = first.filter(x=>x!=='' && isFinite(parseFloat(x))).length;
+  const hasHead = numeric < first.length/2;
+  RS.head = hasHead ? first : first.map((_,i)=>'column '+(i+1));
+  RS.rows = (hasHead?lines.slice(1):lines).map(l=>roseSplit(l,d)).filter(r=>r.length===RS.head.length);
+  RS.name = name; RS.parsed = RS.rows.length;
+  RS.sp = roseGuess(RS.head,'sp'); RS.di = roseGuess(RS.head,'di'); RS.dt = roseGuess(RS.head,'dt');
+  RS.dt2 = -1;
+  if(RS.dt >= 0){ const t = roseGuess(RS.head.map((h,i)=>i===RS.dt?'':h),'dt'); if(t>=0) RS.dt2 = t; }
+  if(!RS.rows.length) return 'No data rows were read. Check the delimiter and that every row has '+RS.head.length+' fields.';
+  return null;
+}
+/* ISO-like only, deliberately: 03/04 is the fourth of March in Manila and the third of April in
+   Chicago, and guessing which would put a monsoon in the wrong season. Anything else is reported
+   as unread rather than assumed. */
+function roseTime(r){
+  if(RS.dt < 0) return null;
+  let s = r[RS.dt]; if(RS.dt2 >= 0) s += ' ' + r[RS.dt2];
+  const m = /^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/.exec(s.trim());
+  if(!m) return undefined;
+  return {y:+m[1], mo:+m[2], d:+m[3], h:m[4]===undefined?null:+m[4]};
+}
+/* --- binning --- */
+function roseCompute(o){
+  const N = o.sectors, w = 360/N, edges = o.edges;
+  const nb = edges.length;                 // bins: [edges[0],edges[1]) ... [edges[nb-1], inf)
+  const M2 = Array.from({length:N},()=>new Array(nb).fill(0));
+  let calm=0, used=0, skipDir=0, skipSpd=0, outTime=0, sum=0, mx=-Infinity, badT=0;
+  for(const r of RS.rows){
+    const sRaw = parseFloat(r[RS.sp]), dRaw = parseFloat(r[RS.di]);
+    if(!isFinite(sRaw) || sRaw < 0 || sRaw >= 900){ skipSpd++; continue; }
+    if(RS.dt >= 0 && (o.year || o.month || o.hour !== '')){
+      const t = roseTime(r);
+      if(t === undefined){ badT++; continue; }
+      if(o.year  && t.y  !== +o.year)  { outTime++; continue; }
+      if(o.month && t.mo !== +o.month) { outTime++; continue; }
+      if(o.hour !== '' && t.h !== +o.hour){ outTime++; continue; }
+    }
+    const sp = sRaw;   // the unit control says what unit the file is in; nothing is converted
+    sum += sp; if(sp > mx) mx = sp; used++;
+    if(sp < o.calm){ calm++; continue; }
+    if(!isFinite(dRaw) || dRaw < 0 || dRaw > 360){ skipDir++; continue; }
+    const sec = M.windSector(dRaw, N);
+    if(!isFinite(sec)){ skipDir++; continue; }
+    let b = 0; for(let i=0;i<nb;i++) if(sp >= edges[i]) b = i;
+    M2[sec][b]++;
+  }
+  const inRose = used - calm - skipDir;
+  return {M:M2, N, nb, calm, used, inRose, skipDir, skipSpd, outTime, badT,
+          mean: used?sum/used:NaN, max: isFinite(mx)?mx:NaN};
+}
+/* --- drawing --- */
+const ROSE_PT = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function roseLabel(i,N){
+  if(N===16) return ROSE_PT[i];
+  if(N===8)  return ROSE_PT[i*2];
+  const d=Math.round(i*360/N); return (d%30===0)?String(d):'';
+}
+function roseSvg(c, o){
+  const S=520, cx=S/2, cy=S/2, R=S/2-46, r0=Math.max(16, R*0.13);
+  const pol=(r,a)=>[cx+r*Math.sin(a*Math.PI/180), cy-r*Math.cos(a*Math.PI/180)];
+  const ramp=roseRamp();
+  const tot=c.inRose+c.calm;
+  if(!tot) return '<p class="rule">Nothing to plot: every record was excluded. See the counts below.</p>';
+  /* petal length is linear in frequency, so a ring at 5% is five times the radius of one at 1%
+     and the eye reads the percentage directly */
+  const pct=c.M.map(row=>row.map(v=>100*v/tot));
+  const maxR=Math.max(...pct.map(row=>row.reduce((a,b)=>a+b,0)));
+  const step=[0.5,1,2,2.5,5,10,20].find(s=>maxR/s<=5) || Math.ceil(maxR/5);
+  const top=Math.ceil(maxR/step)*step || step;
+  const rr=p=>r0+(R-r0)*(p/top);
+  const w=360/c.N, gap=Math.min(2.2, w*0.10);
+  const out=[];
+  out.push('<svg viewBox="0 0 '+S+' '+S+'" class="rose" role="img" aria-label="Wind rose">');
+  /* rings and spokes, recessive */
+  for(let p=step;p<=top+1e-9;p+=step){
+    out.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+rr(p).toFixed(1)+'" class="ro-ring"/>');
+    out.push('<text x="'+(cx+3)+'" y="'+(cy-rr(p)+3).toFixed(1)+'" class="ro-ringlab">'+N(p,step<1?1:0)+'%</text>');
+  }
+  for(let i=0;i<c.N;i++){ const a=i*w, q=pol(R+4,a);
+    out.push('<line x1="'+cx+'" y1="'+cy+'" x2="'+q[0].toFixed(1)+'" y2="'+q[1].toFixed(1)+'" class="ro-spoke"/>'); }
+  /* petals, stacked outward, 2px surface gap between segments */
+  const dp=v=>Number.isInteger(v)?String(v):N(v,1);
+  const lab=(b)=>b<c.nb-1 ? dp(o.edges[b])+'–'+dp(o.edges[b+1]) : dp(o.edges[b])+' and above';
+  for(let i=0;i<c.N;i++){
+    let acc=0;
+    for(let b=0;b<c.nb;b++){
+      const v=pct[i][b]; if(v<=0){ acc+=v; continue; }
+      const r1=rr(acc), r2=rr(acc+v);
+      const a1=i*w-w/2+gap/2, a2=i*w+w/2-gap/2;
+      const p1=pol(r2,a1), p2=pol(r2,a2), p3=pol(r1,a2), p4=pol(r1,a1);
+      const d='M'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)
+             +'A'+r2.toFixed(1)+' '+r2.toFixed(1)+' 0 0 1 '+p2[0].toFixed(1)+' '+p2[1].toFixed(1)
+             +'L'+p3[0].toFixed(1)+' '+p3[1].toFixed(1)
+             +'A'+r1.toFixed(1)+' '+r1.toFixed(1)+' 0 0 0 '+p4[0].toFixed(1)+' '+p4[1].toFixed(1)+'Z';
+      out.push('<path d="'+d+'" fill="'+ramp[Math.min(b,ramp.length-1)]+'" class="ro-seg">'
+             + '<title>'+roseLabel(i,c.N)+(c.N>16?'°':'')+', '+lab(b)+' '+o.unit
+             + ': '+N(v,2)+'% ('+c.M[i][b]+' records)</title></path>');
+      acc+=v;
+    }
+  }
+  /* calm hole */
+  out.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+r0.toFixed(1)+'" class="ro-hole"/>');
+  out.push('<text x="'+cx+'" y="'+(cy-1)+'" class="ro-calm">'+N(100*c.calm/tot,1)+'%</text>');
+  out.push('<text x="'+cx+'" y="'+(cy+11)+'" class="ro-calmlab">calm</text>');
+  /* compass labels */
+  for(let i=0;i<c.N;i++){ const t=roseLabel(i,c.N); if(!t) continue;
+    const q=pol(R+17,i*w);
+    out.push('<text x="'+q[0].toFixed(1)+'" y="'+(q[1]+3.5).toFixed(1)+'" class="ro-pt">'+t+'</text>'); }
+  out.push('</svg>');
+  /* legend, always present */
+  const key=[];
+  for(let b=0;b<c.nb;b++)
+    key.push('<span><i style="background:'+ramp[Math.min(b,ramp.length-1)]+'"></i>'+lab(b)+'</span>');
+  key.push('<span><i class="ro-keycalm"></i>calm, below '+(Number.isInteger(o.calm)?o.calm:N(o.calm,1))+'</span>');
+  return out.join('') + '<div class="ro-key">'+key.join('')+'<span class="ro-keyunit">'+o.unit+'</span></div>';
+}
+function roseFreqCsv(c,o){
+  const lab=b=>b<c.nb-1 ? o.edges[b]+'-'+o.edges[b+1] : o.edges[b]+'+';
+  const tot=c.inRose+c.calm;
+  const L=['sector,'+Array.from({length:c.nb},(_,b)=>lab(b)).join(',')+',total'];
+  for(let i=0;i<c.N;i++){
+    const row=c.M[i], s=row.reduce((a,b)=>a+b,0);
+    L.push((c.N===16||c.N===8?roseLabel(i,c.N):N(i*360/c.N,1))+','+row.map(v=>(100*v/tot).toFixed(3)).join(',')+','+(100*s/tot).toFixed(3));
+  }
+  L.push('calm,'+new Array(c.nb).fill('').join(',')+','+(100*c.calm/tot).toFixed(3));
+  return '# Kalkunahon wind rose, frequency of occurrence in per cent of all records used\n'
+       + '# speed unit '+o.unit+', '+c.N+' sectors centred on the compass point, calm below '+o.calm+'\n'
+       + '# records used '+c.used+', in the petals '+c.inRose+', calm '+c.calm+'\n' + L.join('\n') + '\n';
+}
+function roseDownload(name, mime, text){
+  const b=new Blob([text],{type:mime}), u=URL.createObjectURL(b);
+  const a=document.createElement('a'); a.href=u; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u), 4000);
+}
+/* --- the panel --- */
+const ROSE_DEF_EDGES = {kt:'1, 4, 7, 11, 17, 22, 28', ms:'0.5, 2, 3.5, 5.5, 8.5, 11, 14',
+                        kmh:'2, 7, 13, 20, 31, 40, 51', mph:'1, 5, 8, 13, 19, 25, 32'};
+function roseOpts(){
+  const g=id=>document.getElementById('ro-'+id);
+  const edges=(g('edges').value||'').split(/[, ]+/).map(parseFloat).filter(x=>isFinite(x))
+                .sort((a,b)=>a-b).slice(0,ROSE_MAXBINS);
+  return {unit:g('unit').value, sectors:+g('sect').value, calm:parseFloat(g('calm').value),
+          edges: edges.length?edges:[1], year:g('year')?g('year').value:'',
+          month:g('month')?g('month').value:'', hour:g('hour')?g('hour').value:''};
+}
+function roseRender(){
+  const host=document.getElementById('ro-out');
+  if(!RS.rows.length){ host.innerHTML=''; return; }
+  const o=roseOpts();
+  if(!isFinite(o.calm)){ host.innerHTML='<p class="rule">Give a calm threshold.</p>'; return; }
+  RS.sp=+document.getElementById('ro-cs').value; RS.di=+document.getElementById('ro-cd').value;
+  const dsel=document.getElementById('ro-ct'); RS.dt = dsel ? +dsel.value : -1;
+  const c=roseCompute(o);
+  const tot=c.inRose+c.calm;
+  const prevail=(()=>{ let bi=0,bv=-1; for(let i=0;i<c.N;i++){const s=c.M[i].reduce((a,b)=>a+b,0); if(s>bv){bv=s;bi=i;}}
+    return bv>0 ? roseLabel(bi,c.N)+' ('+N(100*bv/tot,1)+'%)' : '—'; })();
+  const notes=[];
+  if(c.skipSpd) notes.push('<b>'+c.skipSpd+'</b> rows had no usable speed and were dropped.');
+  if(c.skipDir) notes.push('<b>'+c.skipDir+'</b> rows had a speed above the calm threshold but no usable direction, so they are in the statistics and not in the petals.');
+  if(c.badT)    notes.push('<b>'+c.badT+'</b> rows had a date this module could not read. It reads ISO order only, YYYY-MM-DD, because 03/04 is March in Manila and April in Chicago and guessing would move a monsoon.');
+  if(c.outTime) notes.push('<b>'+c.outTime+'</b> rows were outside the time filter.');
+  const rows=[['records in the file', RS.parsed],['used', c.used],['in the petals', c.inRose],
+              ['calm', c.calm+' ('+N(100*c.calm/tot,1)+'%)'],['prevailing sector', prevail],
+              ['mean speed', N(c.mean,2)+' '+o.unit],['strongest', N(c.max,1)+' '+o.unit]];
+  host.innerHTML = roseSvg(c,o)
+    + '<div class="out">'+rows.map(r=>'<div class="r"><span class="k">'+r[0]+'</span><span class="v">'+r[1]+'</span><span class="u"></span></div>').join('')+'</div>'
+    + (notes.length?'<div class="flag">'+notes.join(' ')+'</div>':'')
+    + '<div class="sayact"><button type="button" class="locbtn" onclick="roseSave(\'svg\')">Download the rose as SVG</button>'
+    + '<button type="button" class="locbtn" onclick="roseSave(\'csv\')">Download the frequency table</button></div>'
+    + '<details class="ro-tab"><summary>frequency table</summary><div class="scroll"><pre>'+esc(roseFreqCsv(c,o))+'</pre></div></details>';
+  window.ROSE_LAST={c:c,o:o};
+}
+window.roseSave=function(kind){
+  const L=window.ROSE_LAST; if(!L) return;
+  const stem=(RS.name||'windrose').replace(/\.[^.]*$/,'');
+  if(kind==='csv') return roseDownload(stem+'-windrose.csv','text/csv',roseFreqCsv(L.c,L.o));
+  const svg=document.querySelector('#ro-out svg.rose'); if(!svg) return;
+  const cl=svg.cloneNode(true), cs=getComputedStyle(document.documentElement);
+  /* inline the tokens the stylesheet supplies, so the saved file stands alone */
+  const st='<style>text{font-family:monospace}.ro-ring,.ro-spoke{fill:none;stroke:'+cs.getPropertyValue('--line-2').trim()+';stroke-width:.8}'
+    +'.ro-seg{stroke:'+cs.getPropertyValue('--panel').trim()+';stroke-width:2}'
+    +'.ro-hole{fill:'+cs.getPropertyValue('--panel').trim()+';stroke:'+cs.getPropertyValue('--line').trim()+'}'
+    +'.ro-calm{font-size:13px;font-weight:600;text-anchor:middle;fill:'+cs.getPropertyValue('--ink').trim()+'}'
+    +'.ro-calmlab,.ro-ringlab{font-size:9px;text-anchor:middle;fill:'+cs.getPropertyValue('--ink-3').trim()+'}'
+    +'.ro-ringlab{text-anchor:start}.ro-pt{font-size:11px;text-anchor:middle;fill:'+cs.getPropertyValue('--ink-2').trim()+'}</style>';
+  cl.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  cl.insertAdjacentHTML('afterbegin', st);
+  roseDownload(stem+'-windrose.svg','image/svg+xml','<?xml version="1.0" encoding="UTF-8"?>\n'+cl.outerHTML);
+};
+function roseInit(){
+  const host=document.getElementById('rose-panel'); if(!host) return;
+  host.innerHTML =
+    '<div class="card span2"><h3 class="card-t"><span>Wind rose from a CSV</span></h3>'
+    + '<div class="locate"><input type="file" id="ro-file" accept=".csv,.txt,text/csv"><p class="locnote" id="ro-note"></p></div>'
+    + '<div class="fields" id="ro-ctl" hidden></div>'
+    + '<div class="rule">The file is read in this browser and never uploaded. <b>Direction must be the direction the wind blows from</b>, in degrees. Sectors are centred on the compass point, so with 16 sectors north spans 348.75&deg; to 11.25&deg;. <b>Calms carry no direction</b> and are counted in the middle rather than added to north, which is what happens when a spreadsheet treats a direction of 0 as north.</div>'
+    + '<div id="ro-out"></div>'
+    + '<p class="src">Frequency of occurrence per sector and speed bin, as a percentage of all records used. The default bin edges are the <b>Beaufort force boundaries</b> the engine already carries (WMO scale, force 1 through 6 and then 7 and above), and the default calm threshold is Beaufort force 0. Both are editable. The colour ramp is a single hue stepped light to dark, checked for monotone lightness and for contrast against the page in both themes, rather than the rainbow a wind rose is usually given: a rainbow encodes magnitude with hue, which is the one channel that does not carry order.</p></div>';
+  document.getElementById('ro-file').addEventListener('change', e=>{
+    const f=e.target.files && e.target.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=()=>{
+      const err=roseLoad(String(rd.result), f.name);
+      const note=document.getElementById('ro-note');
+      if(err){ note.innerHTML='<b>'+esc(f.name)+'</b>: '+err; document.getElementById('ro-ctl').hidden=true; return; }
+      note.innerHTML='<b>'+esc(f.name)+'</b>, '+RS.parsed+' rows, '+RS.head.length+' columns.'
+        + (RS.sp<0||RS.di<0 ? ' <b>Pick the speed and direction columns below.</b>' : ' Columns detected; change them below if they are wrong.');
+      roseControls();
+    };
+    rd.onerror=()=>{ document.getElementById('ro-note').textContent='That file could not be read.'; };
+    rd.readAsText(f);
+  });
+}
+function roseControls(){
+  const ctl=document.getElementById('ro-ctl'); ctl.hidden=false;
+  const opt=(sel,extra)=>RS.head.map((h,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+esc(h)+'</option>').join('')+(extra||'');
+  const F=(id,lab,inner,wide)=>'<div class="f'+(wide?' f2':'')+'"><label class="fl" for="ro-'+id+'">'+lab+'</label>'+inner+'</div>';
+  let h = F('cs','Speed column','<select id="ro-cs">'+opt(RS.sp)+'</select>')
+        + F('cd','Direction column','<select id="ro-cd">'+opt(RS.di)+'</select>')
+        + F('unit','Unit of the speed column','<select id="ro-unit"><option value="kt">knots</option><option value="ms">m/s</option><option value="kmh">km/h</option><option value="mph">mph</option></select>')
+        + F('sect','Sectors','<select id="ro-sect"><option value="16" selected>16 (22.5°)</option><option value="8">8 (45°)</option><option value="36">36 (10°)</option></select>')
+        + F('calm','Calm below','<input type="number" id="ro-calm" step="0.1" value="1">')
+        + F('edges','Bin edges, comma separated','<input type="text" id="ro-edges" value="'+ROSE_DEF_EDGES.kt+'">', true);
+  if(RS.dt >= 0){
+    const yrs=new Set(), hrs=new Set();
+    RS.rows.forEach(r=>{ const t=roseTime(r); if(t){ yrs.add(t.y); if(t.h!==null) hrs.add(t.h); } });
+    const Y=[...yrs].sort(), H=[...hrs].sort((a,b)=>a-b);
+    h += F('ct','Date column','<select id="ro-ct"><option value="-1">none</option>'+opt(RS.dt)+'</select>')
+       + F('year','Year','<select id="ro-year"><option value="">all</option>'+Y.map(y=>'<option>'+y+'</option>').join('')+'</select>')
+       + F('month','Month','<select id="ro-month"><option value="">all</option>'+
+           ['January','February','March','April','May','June','July','August','September','October','November','December']
+             .map((m,i)=>'<option value="'+(i+1)+'">'+m+'</option>').join('')+'</select>')
+       + F('hour','Hour','<select id="ro-hour"><option value="">all</option>'+H.map(x=>'<option value="'+x+'">'+String(x).padStart(2,'0')+':00</option>').join('')+'</select>');
+  }
+  ctl.innerHTML=h;
+  ctl.querySelectorAll('input,select').forEach(e=>{
+    e.addEventListener('input', roseRender); e.addEventListener('change', roseRender);
+  });
+  document.getElementById('ro-unit').addEventListener('change', e=>{
+    document.getElementById('ro-edges').value = ROSE_DEF_EDGES[e.target.value];
+    document.getElementById('ro-calm').value  = ROSE_DEF_EDGES[e.target.value].split(',')[0].trim();
+    roseRender();
+  });
+  roseRender();
+}
 
 /* =================================================================
    SHELL

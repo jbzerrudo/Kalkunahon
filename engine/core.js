@@ -258,6 +258,17 @@ function kz07WindFromP(pc, penv, lat, c, S){
 }
 
 /* --- 1.7 Vector components. Meteorological direction = FROM. --- */
+/* Which sector of a wind rose a direction falls in. Sectors are CENTRED on the compass point,
+   so with 16 of them north spans 348.75 to 11.25 degrees and not 0 to 22.5; putting the boundary
+   at 0 instead of at half a sector rotates the whole rose by half a sector, which is the classic
+   way to get a wind rose subtly and confidently wrong. Returns 0..n-1 counting clockwise from
+   north, or NaN for something that is not a direction. */
+function windSector(dirDeg, n){
+  if(!isNum(dirDeg) || !isNum(n) || n < 2) return NaN;
+  if(dirDeg < 0 || dirDeg > 360) return NaN;
+  const w = 360/n;
+  return ((Math.round((dirDeg % 360)/w) % n) + n) % n;
+}
 function uvFromSpeedDir(v, dirDeg){
   const r = dirDeg*Math.PI/180;
   return {u: -v*Math.sin(r), v: -v*Math.cos(r)};
@@ -1440,7 +1451,7 @@ const API = {
   EXPOSURES,EXPOSURE_LABEL,K_VMAX,K_LEGACY,vmax1to10,vmax10to1,GUST,gustFactor,
   TC_SCALES,classify,tcClassifyAll,
   ah77WindFromP,ah77PFromWind,kz07PFromWind,kz07WindFromP,
-  uvFromSpeedDir,speedDirFromUV,Z0,logProfile,powerLaw,windPowerDensity,
+  uvFromSpeedDir,speedDirFromUV,windSector,Z0,logProfile,powerLaw,windPowerDensity,
   esWater,esIce,esBolton,dewpointFromRH,rhFromDewpoint,frostpointFromRHi,
   rhIceFromRhWater,dewpointSimple,mixingRatio,specificHumidity,vapourPressureFromW,
   absoluteHumidity,virtualTemp,wetBulbStull,wetBulbPsychro,rhFromWetBulb,iceBulbPsychro,heatIndexF,windChillC,

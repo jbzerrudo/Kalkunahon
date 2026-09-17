@@ -421,6 +421,48 @@ ok('ISO 7243 differs from the BOM approximation',
    ===================================================================== */
 console.log('\n== REGRESSIONS ==');
 
+/* Wind-rose sectors are centred on the compass point. Putting the boundary at 0 instead of at
+   half a sector rotates the whole rose by half a sector, which looks entirely plausible. */
+{
+  const PT=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  const at = d => PT[M.windSector(d,16)];
+  eq('0 deg is N',        at(0),     'N');
+  eq('11.2 deg is still N', at(11.2),'N');
+  eq('11.3 deg is NNE',   at(11.3),  'NNE');
+  eq('33.7 deg is NNE',   at(33.7),  'NNE');
+  eq('33.8 deg is NE',    at(33.8),  'NE');
+  eq('90 deg is E',       at(90),    'E');
+  eq('180 deg is S',      at(180),   'S');
+  eq('270 deg is W',      at(270),   'W');
+  eq('348.7 deg is NNW',  at(348.7), 'NNW');
+  eq('348.8 deg wraps to N', at(348.8), 'N');
+  eq('360 deg is N',      at(360),   'N');
+  eq('8 sectors: 22.6 deg is the second sector', M.windSector(22.6,8), 1);
+  eq('a direction of -1 is not a direction', isFinite(M.windSector(-1,16))?1:0, 0);
+  eq('a direction of 361 is not a direction', isFinite(M.windSector(361,16))?1:0, 0);
+  /* every sector must be the same width */
+  const cnt=new Array(16).fill(0);
+  for(let d=0; d<360; d+=0.1) cnt[M.windSector(d,16)]++;
+  eq('all 16 sectors are equal width', new Set(cnt).size, 1);
+}
+
+/* The Skew-T draws its saturation mixing-ratio lines by inverting w = EPS e/(p - e) for e and
+   then inverting the engine's own Magnus form for the dewpoint. Check the round trip. */
+{
+  const line = (wg,p) => { const w=wg/1000, e=w*p/(M.EPS+w), l=Math.log(e/6.112);
+                           return 243.12*l/(17.62-l); };
+  let worst = 0;
+  [[4,1000],[16,1000],[32,1000],[4,700],[16,850],[1,500],[0.4,600]].forEach(([wg,p])=>{
+    const e = M.esWater(line(wg,p));
+    worst = Math.max(worst, Math.abs(M.EPS*e/(p-e)*1000 - wg));
+  });
+  ok('Skew-T mixing-ratio lines round-trip through esWater', worst, 0, 1e-9, 'g/kg');
+  ok('and the 16 g/kg line meets 1000 hPa at its published dewpoint', line(16,1000), 21.18, 0.01, 'C');
+}
+/* The dashed parcel on the diagram is the same one the Lifted Index uses. */
+ok('Skew-T parcel at 500 hPa equals the Lifted Index parcel',
+   M.liftParcelTo(1000,31,24,500), -9 - M.liftedIndex(1000,31,24,-9), 1e-9, 'C');
+
 /* BOM's simplified WBGT is published with the vapour-pressure expression it is to be used with.
    Computing e with the engine's own Magnus form instead shifted the answer by up to 0.26 K. */
 {
