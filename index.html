@@ -250,8 +250,13 @@ svg.skewt{width:100%; height:auto; max-width:640px; display:block; margin:.2rem 
 .skewt .sk-lfc{fill:none; stroke:var(--warm); stroke-width:1.8}
 .skewt .sk-cin{fill:var(--cold); fill-opacity:.30; stroke:var(--cold);
   stroke-width:.8; stroke-opacity:.55}
+.skewt .sk-el{fill:none; stroke:var(--warm); stroke-width:1.8}
+.skewt .sk-cape{fill:var(--warm); fill-opacity:.22; stroke:var(--warm);
+  stroke-width:.8; stroke-opacity:.5}
 .sk-key .sk-keycin{display:inline-block; width:16px; height:9px; border:0; background:var(--cold);
   opacity:.30; vertical-align:middle; margin-right:.35rem; border-radius:2px}
+.sk-key .sk-keycape{display:inline-block; width:16px; height:9px; border:0; background:var(--warm);
+  opacity:.22; vertical-align:middle; margin-right:.35rem; border-radius:2px}
 .skewt text{fill:var(--ink-3); font-size:10px}
 .skewt .sk-plab{text-anchor:end}
 .skewt .sk-tlab{text-anchor:middle}
@@ -554,6 +559,7 @@ tr:last-child td{border-bottom:0}
             <li>Romps, D.M., 2017: <i>J. Atmos. Sci.</i> <b>74</b>, 3891-3900 (exact LCL).</li>
             <li>Stull, R., <i>Practical Meteorology</i>, Ch. 4 and Appendix B (saturated adiabat eq. 4.37b).</li>
             <li>NOAA SPC and NWS stability index pages for the interpretation thresholds.</li>
+            <li>Doswell, C.A. III and E.N. Rasmussen, 1994: <i>Wea. Forecasting</i> <b>9</b>, 625-629 &mdash; why a CAPE computed on temperature rather than virtual temperature is an underestimate. The Skew-T card computes it on temperature and says so, because the environmental dewpoint above 700 hPa is not among its inputs.</li>
           </ul>
         </div>
       </div>
@@ -1998,29 +2004,35 @@ function envTempAt(levels, p){
   }
   return NaN;
 }
-/* Level of free convection: the pressure at which a parcel lifted from the surface first becomes
-   warmer than its environment and stays warmer to the top of the data. NaN if that never happens
-   within the levels given, which is a real answer and not a failure. */
+/* Level of free convection: the lowest pressure above the surface at which a parcel lifted from
+   the surface first becomes warmer than its environment. It is the FIRST upward crossing from
+   negative to positive buoyancy, nothing more: an earlier version demanded that the parcel still
+   be buoyant at the top of the data, which silently returned NaN for every sounding deep enough
+   to contain an equilibrium level, that is, for exactly the soundings that matter. NaN here means
+   the parcel never becomes buoyant within the levels given, which is a real answer. */
 function lfcPressure(levels, ps, tsC, tdsC, step){
   step = step || 1;
   const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
   if(L.length < 2 || !isNum(ps) || !isNum(tsC) || !isNum(tdsC) || tdsC > tsC) return NaN;
   const pTop = L[L.length-1][0];
   const buoy = p => liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
-  if(!(buoy(pTop) > 0)) return NaN;              // still negatively buoyant at the top: no LFC here
-  let hi = null;                                  // last pressure that is NOT buoyant, coming down
-  for(let p = ps - step; p >= pTop; p -= step){
+  const b0 = buoy(ps);
+  if(isNum(b0) && b0 > 0) return ps;              // buoyant from the ground: no inhibition to clear
+  let lo = null, hi = null;                       // lo = last not buoyant, hi = first buoyant above it
+  let pPrev = ps, bPrev = b0;
+  for(let p = ps - step; p >= pTop - 1e-9; p -= step){
     const b = buoy(p);
-    if(isNum(b) && b <= 0) hi = p;
+    if(!isNum(b)){ pPrev = p; bPrev = b; continue; }
+    if(isNum(bPrev) && bPrev <= 0 && b > 0){ lo = pPrev; hi = p; break; }
+    pPrev = p; bPrev = b;
   }
-  if(hi === null) return ps;                      // buoyant from the surface up
-  let lo = hi, up = hi - step;                    // bracket, then bisect
+  if(lo === null) return NaN;                     // never becomes buoyant inside the data
   for(let i=0;i<60;i++){
-    const mid = 0.5*(lo+up);
-    if(buoy(mid) > 0) lo = mid; else up = mid;
-    if(Math.abs(lo-up) < 1e-6) break;
+    const mid = 0.5*(lo+hi);
+    if(buoy(mid) > 0) hi = mid; else lo = mid;
+    if(Math.abs(lo-hi) < 1e-6) break;
   }
-  return 0.5*(lo+up);
+  return 0.5*(lo+hi);
 }
 /* Convective inhibition, J/kg, as the negative area between the surface and the LFC.
    Returns a negative number, or 0 where the parcel is buoyant from the ground. */
@@ -2032,6 +2044,50 @@ function cinToLfc(levels, ps, tsC, tdsC, pLfc, steps){
   let s = 0;
   for(let i=0;i<steps;i++){
     const p = Math.exp(Math.log(ps) - (i+0.5)*dl);
+    const d = liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+    if(isNum(d)) s += d*dl;
+  }
+  return RD*s;
+}
+/* Equilibrium level: above the LFC, the first pressure at which the parcel becomes colder than
+   its environment again and the positive area closes. NaN when the parcel is still buoyant at the
+   top of the levels given, which is the honest answer and the reason CAPE cannot be reported from
+   levels that stop at 500 hPa: a deep tropical parcel is still some 9 K warmer than its
+   environment at 200 hPa and does not equilibrate until near 120 hPa. */
+function elPressure(levels, ps, tsC, tdsC, pLfc, step){
+  step = step || 1;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  if(L.length < 2 || !isNum(pLfc)) return NaN;
+  const pTop = L[L.length-1][0];
+  if(!(pTop < pLfc)) return NaN;
+  const buoy = p => liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+  let lo = null, hi = null;                       // lo = last buoyant, hi = first not buoyant above
+  let pPrev = pLfc, bPrev = buoy(pLfc);
+  for(let p = pLfc - step; p >= pTop - 1e-9; p -= step){
+    const b = buoy(p);
+    if(!isNum(b)){ pPrev = p; bPrev = b; continue; }
+    if(isNum(bPrev) && bPrev > 0 && b <= 0){ lo = pPrev; hi = p; break; }
+    pPrev = p; bPrev = b;
+  }
+  if(lo === null) return NaN;                     // still buoyant at the top of the data
+  for(let i=0;i<60;i++){
+    const mid = 0.5*(lo+hi);
+    if(buoy(mid) > 0) lo = mid; else hi = mid;
+    if(Math.abs(lo-hi) < 1e-6) break;
+  }
+  return 0.5*(lo+hi);
+}
+/* CAPE, J/kg, as the positive area between the LFC and the EL. Both bounds must be real: a CAPE
+   integrated to the top of the data instead of to the EL is a lower bound wearing the name of a
+   quantity, and in the tropics the part left out is the larger part. */
+function capeLfcToEl(levels, ps, tsC, tdsC, pLfc, pEl, steps){
+  if(!isNum(pLfc) || !isNum(pEl) || !(pEl < pLfc)) return NaN;
+  steps = steps || 2000;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  const dl = (Math.log(pLfc)-Math.log(pEl))/steps;
+  let s = 0;
+  for(let i=0;i<steps;i++){
+    const p = Math.exp(Math.log(pLfc) - (i+0.5)*dl);
     const d = liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
     if(isNum(d)) s += d*dl;
   }
@@ -2087,7 +2143,7 @@ const API = {
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
   thickness,meanTvFromThickness,airDensity,
   potentialTemp,invPotentialTemp,boltonTL,thetaE,dryLapse,moistLapse,
-  moistLapseDTDP,liftMoist,envTempAt,lfcPressure,cinToLfc,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
+  moistLapseDTDP,liftMoist,envTempAt,lfcPressure,cinToLfc,elPressure,capeLfcToEl,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
   kIndex,totalTotals,verticalTotals,crossTotals,liftParcelTo,liftedIndex,
   showalter,sweat,bulkRichardson
 };
@@ -3322,7 +3378,9 @@ window.saveSkewT = function(){
    makes the dry adiabats and the isotherms nearly orthogonal, so an ordinary tropospheric lapse
    rate reads as a slope rather than as a line that is almost vertical.
    Everything is clipped to the plot box, so lines that run off the top right simply leave. */
-const SKT = {W:520, H:600, ML:44, MR:66, MT:14, MB:34, PTOP:100, PBOT:1050,
+/* PTOP sits a little above the highest level the card accepts, so the 100 hPa point and its
+   marker fall inside the plot instead of being sliced in half by the top edge. */
+const SKT = {W:520, H:600, ML:44, MR:66, MT:14, MB:34, PTOP:92, PBOT:1050,
              TMIN:-50, TMAX:40, SKEW:0.42};
 const sktY = p => SKT.MT + Math.log(SKT.PTOP/p)/Math.log(SKT.PTOP/SKT.PBOT)*SKT.H;
 const sktX = (t,p) => SKT.ML + ((t-SKT.TMIN)/(SKT.TMAX-SKT.TMIN))*SKT.W + SKT.SKEW*(SKT.MT+SKT.H-sktY(p));
@@ -3391,7 +3449,8 @@ function skewTSvg(v, X){
   out.push('<g clip-path="url(#sktclip)">'+L.join('')+'</g>');
 
   /* ---- the sounding itself ---- */
-  const env=[[v.ts,v.ps],[v.t85,850],[v.t70,700],[v.t50,500]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
+  const env=[[v.ts,v.ps],[v.t85,850],[v.t70,700],[v.t50,500],[v.t40,400],[v.t30,300],
+             [v.t25,250],[v.t20,200],[v.t15,150],[v.t10,100]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
   const dew=[[v.tds,v.ps],[v.td85,850],[v.td70,700]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
   const D=[];
   const mark=(t,p,cls)=>'<circle cx="'+sktX(t,p).toFixed(1)+'" cy="'+sktY(p).toFixed(1)+'" r="3.4" class="'+cls+'"/>';
@@ -3428,6 +3487,26 @@ function skewTSvg(v, X){
       D.push('<text x="'+(sktX(tl,X.lfc)+9).toFixed(1)+'" y="'+(sktY(X.lfc)-5).toFixed(1)+'" class="sk-note">LFC '+N(X.lfc,0)+' hPa</text>');
     }
   }
+  /* the positive area, LFC to EL. It is drawn only when the EL is real: an area shaded up to the
+     top of whatever levels were entered would be a picture of the data running out, not of CAPE. */
+  if(isFinite(X.lfc) && isFinite(X.el) && X.el < X.lfc && X.levels){
+    const up=[], dn=[];
+    for(let p=X.lfc;p>=X.el;p-=2){
+      const tp=M.liftParcelTo(v.ps,v.ts,v.tds,p), te=M.envTempAt(X.levels,p);
+      if(isFinite(tp)) up.push([sktX(tp,p),sktY(p)]);
+      if(isFinite(te)) dn.push([sktX(te,p),sktY(p)]);
+    }
+    const tpE=M.liftParcelTo(v.ps,v.ts,v.tds,X.el), teE=M.envTempAt(X.levels,X.el);
+    if(isFinite(tpE)) up.push([sktX(tpE,X.el),sktY(X.el)]);
+    if(isFinite(teE)) dn.push([sktX(teE,X.el),sktY(X.el)]);
+    if(up.length>1 && dn.length>1)
+      D.push('<path d="'+sktD(up)+' '+sktD(dn.reverse()).replace(/^M/,'L')+' Z" class="sk-cape"><title>'
+           + 'CAPE, LFC to equilibrium level</title></path>');
+    if(isFinite(teE)){
+      D.push('<circle cx="'+sktX(teE,X.el).toFixed(1)+'" cy="'+sktY(X.el).toFixed(1)+'" r="5" class="sk-el"/>');
+      D.push('<text x="'+(sktX(teE,X.el)+9).toFixed(1)+'" y="'+(sktY(X.el)+4).toFixed(1)+'" class="sk-note">EL '+N(X.el,0)+' hPa</text>');
+    }
+  }
   if(isFinite(pLCL)&&pLCL<=S.PBOT&&pLCL>=S.PTOP){
     const tL=M.liftParcelTo(v.ps,v.ts,v.tds,pLCL);
     D.push('<circle cx="'+sktX(tL,pLCL).toFixed(1)+'" cy="'+sktY(pLCL).toFixed(1)+'" r="5" class="sk-lcl"/>');
@@ -3454,6 +3533,12 @@ card('thermo', {
     {id:'t70',  label:'700 T °C',      type:'num', val:9,   step:0.1},
     {id:'td70', label:'700 T<sub>d</sub> °C', type:'num', val:2, step:0.1},
     {id:'t50',  label:'500 T °C',      type:'num', val:-9,  step:0.1},
+    {id:'t40',  label:'400 T °C',      type:'num', val:-20, step:0.1},
+    {id:'t30',  label:'300 T °C',      type:'num', val:-33, step:0.1},
+    {id:'t25',  label:'250 T °C',      type:'num', val:-42, step:0.1},
+    {id:'t20',  label:'200 T °C',      type:'num', val:-53, step:0.1},
+    {id:'t15',  label:'150 T °C',      type:'num', val:-68, step:0.1},
+    {id:'t10',  label:'100 T °C',      type:'num', val:-80, step:0.1},
     {id:'f85',  label:'850 wind kt',   type:'num', val:25,  step:1},
     {id:'d85',  label:'850 dir °',     type:'num', val:200, step:5},
     {id:'f50',  label:'500 wind kt',   type:'num', val:40,  step:1},
@@ -3469,12 +3554,25 @@ card('thermo', {
     const sw  = M.sweat(v.td85, tt, v.f85, v.f50, v.d85, v.d50);
     const veer = v.d50 - v.d85;
     const shearOn = v.d85>=130 && v.d85<=250 && v.d50>=210 && v.d50<=310 && veer>0 && v.f85>=15 && v.f50>=15;
-    /* The LFC and CIN need only what lies below the top of the data, so both are computable
-       here. CAPE is not: it needs the equilibrium level, which is above 500 hPa. */
-    const levels = [[v.ps,v.ts],[850,v.t85],[700,v.t70],[500,v.t50]].filter(q=>isFinite(q[0])&&isFinite(q[1]));
+    /* Every level the user filled, surface first. The six above 500 hPa are optional: leave them
+       blank and the LFC and the inhibition still come out, because the negative area closes low
+       down, while the EL and CAPE need the data to reach past the top of the positive area. */
+    const levels = [[v.ps,v.ts],[850,v.t85],[700,v.t70],[500,v.t50],[400,v.t40],[300,v.t30],
+                    [250,v.t25],[200,v.t20],[150,v.t15],[100,v.t10]]
+                   .filter(q=>isFinite(q[0])&&isFinite(q[1]));
+    const pTop = levels.length ? levels[levels.length-1][0] : NaN;
     const pLfc = M.lfcPressure(levels, v.ps, v.ts, v.tds);
     const cin  = M.cinToLfc(levels, v.ps, v.ts, v.tds, pLfc);
-    const chart = skewTSvg(v, {levels: levels, lfc: pLfc})
+    const pEl  = M.elPressure(levels, v.ps, v.ts, v.tds, pLfc);
+    const cape = M.capeLfcToEl(levels, v.ps, v.ts, v.tds, pLfc, pEl);
+    /* Why a dash, when there is one. Saying nothing would look like a bug; saying "0" would be a
+       lie, because an unclosed positive area is not an absent one. */
+    const why  = !isFinite(pLfc)
+      ? 'the parcel never becomes warmer than its environment within the levels entered'
+      : (!isFinite(pEl)
+         ? 'the parcel is still warmer than its environment at ' + N(pTop,0) + ' hPa, the top of the levels entered, so the positive area does not close'
+         : '');
+    const chart = skewTSvg(v, {levels: levels, lfc: pLfc, el: pEl})
       + '<div class="sk-key">'
       + '<span><i style="border-color:var(--warm)"></i>temperature</span>'
       + '<span><i style="border-color:var(--good)"></i>dewpoint</span>'
@@ -3483,6 +3581,7 @@ card('thermo', {
       + '<span><i style="border-color:var(--good); opacity:.5"></i>saturated adiabats</span>'
       + '<span><i style="border-color:var(--cold); border-top-style:dashed"></i>mixing ratio g/kg</span>'
       + (isFinite(pLfc) ? '<span><i class="sk-keycin"></i>convective inhibition</span>' : '')
+      + (isFinite(pEl) ? '<span><i class="sk-keycape"></i>CAPE</span>' : '')
       + '</div>'
       + '<div class="sayact" style="justify-content:center"><button type="button" class="locbtn" onclick="saveSkewT()">Download the diagram as SVG</button></div>'
       + '<div class="out">'
@@ -3490,19 +3589,33 @@ card('thermo', {
       + (isFinite(pLfc) ? N(pLfc,0) : '—') + '</span><span class="u">hPa</span></div>'
       + '<div class="r"><span class="k">convective inhibition</span><span class="v">'
       + (isFinite(pLfc) ? N(cin,0) : '—') + '</span><span class="u">J/kg</span></div>'
+      + '<div class="r"><span class="k">equilibrium level</span><span class="v">'
+      + (isFinite(pEl) ? N(pEl,0) : '—') + '</span><span class="u">hPa</span></div>'
+      + '<div class="r"><span class="k">CAPE, surface parcel</span><span class="v">'
+      + (isFinite(cape) ? N(cape,0) : '—') + '</span><span class="u">J/kg</span></div>'
       + '</div>'
-      + '<div class="rule"><b>This is drawn from the four levels above, not from a sounding.</b> Joining them with '
-      + 'straight segments is what the diagram can do with four points; a real ascent is not a straight line between '
-      + 'mandatory levels, and any structure in between, an inversion, a dry layer, is invisible here because it was '
-      + 'never entered. The dashed parcel is lifted from the surface, dry-adiabatically to its LCL and along a '
-      + 'saturated adiabat above it, which is the same parcel the Lifted Index uses, so you can see on the diagram '
-      + 'where that index comes from.<br><br><b>The LFC and the inhibition are shown; CAPE and the equilibrium level '
-      + 'are not.</b> That is not caution, it is what the data can reach. The negative area closes at the LFC, which '
-      + 'lies inside the levels you entered, so it can be drawn and integrated. The positive area has no top: at '
-      + '500 hPa, the highest level this card has, the parcel is normally still warmer than its environment and '
-      + 'climbing, and most of the area sits above that. Printing a CAPE from what is visible would understate a '
-      + 'dangerous sounding severalfold and look precise doing it. <b>Add a 300 hPa and a 200 hPa temperature and '
-      + 'both become computable</b>, since the parcel curve already runs to 100 hPa.</div>';
+      + (why ? '<div class="r dim"><span class="k">why the dash</span><span class="v" style="font-weight:400;text-align:left">'+why+'</span><span class="u"></span></div>' : '')
+      + '<div class="rule"><b>This is drawn from the levels above, not from a sounding.</b> Joining them with '
+      + 'straight segments is what the diagram can do with the points it has; a real ascent is not a straight line '
+      + 'between mandatory levels, and any structure in between, an inversion, a dry layer, is invisible here '
+      + 'because it was never entered. The dashed parcel is lifted from the surface, dry-adiabatically to its LCL '
+      + 'and along a saturated adiabat above it, which is the same parcel the Lifted Index uses, so you can see on '
+      + 'the diagram where that index comes from.<br><br><b>The six levels from 400 to 100 hPa are optional, and '
+      + 'they are what make CAPE possible.</b> Clear them and the LFC and the inhibition still come out, because '
+      + 'the negative area closes at the LFC and that lies low down. The positive area closes only at the '
+      + 'equilibrium level, and in the tropics that is high. An earlier version of this note said a 300 and a 200 '
+      + 'hPa temperature would be enough. <b>That was wrong.</b> A parcel leaving the surface at 31 °C with a 24 °C '
+      + 'dewpoint is still about 9 K warmer than its environment at 200 hPa and does not equilibrate until near '
+      + '120 hPa, so filling those two alone still shows no CAPE. Fill down to 100 hPa, or at least past your own '
+      + 'equilibrium level. Whichever level you stop at becomes the top of the data, and nothing is extrapolated '
+      + 'above it.<br><br><b>What this CAPE is, and is not.</b> It is surface-based, undiluted and pseudoadiabatic, '
+      + 'integrated from the LFC to the EL, and computed on temperature rather than virtual temperature, because '
+      + 'the environmental dewpoint above 700 hPa is not entered here and the virtual correction therefore cannot '
+      + 'be made. Doswell and Rasmussen (1994) showed that neglecting that correction <b>understates</b> CAPE, by '
+      + 'an amount that depends on the case, so read this number as a floor. It is also built from mandatory levels '
+      + 'rather than from every point of a real ascent, and it uses a surface parcel rather than a mixed layer. '
+      + 'Expect it to differ from an operational CAPE for the same sounding. Treat it as the order of magnitude of '
+      + 'the instability, not as a measurement.</div>';
     const r = (k,val,d,b)=>'<tr><td>'+k+'</td><td class="num">'+N(val,d)+'</td><td>'+b+'</td></tr>';
     return {
       html: chart + '<div class="scroll"><table><thead><tr><th>Index</th><th class="num">Value</th><th>Interpretation</th></tr></thead><tbody>'+
@@ -3519,7 +3632,7 @@ card('thermo', {
       flag:'Lifted Index here uses a <b>surface</b> parcel, lifted dry-adiabatically to its LCL and then along a saturated adiabat integrated by RK4 to 500 hPa. Operational LI uses the mean of the lowest 50 hPa, so a surface observation that is unrepresentative (a hot asphalt reading, a shallow moist layer) will make this too unstable. K-Index favours non-severe air-mass convection; SSI ignores the surface layer entirely, which makes it robust under a shallow cold front but blind to surface-based instability.'
     };
   },
-  src:'Definitions and interpretation thresholds from NOAA/NWS and SPC. SWEAT = 12T<sub>d850</sub> + 20(TT − 49) + 2f<sub>850</sub> + f<sub>500</sub> + 125(S + 0.2), with T<sub>d850</sub> clamped at 0, the TT term zeroed if TT &lt; 49, and the shear term zeroed unless 850 dir is 130-250°, 500 dir is 210-310°, the wind veers, and both speeds are ≥ 15 kt. NWS publishes several different threshold tables for these indices; the bands shown follow NWS Louisville (LI, SSI) and the NWS Skew-T parameter page (KI, TT, SWEAT).'
+  src:'The LFC, the equilibrium level, CIN and CAPE are integrated by this card from the levels you enter, not read from a table: the parcel is lifted dry-adiabatically to its LCL and then along a pseudoadiabat, and the two areas are integrated in &minus;R<sub>d</sub>&thinsp;&int;&thinsp;(T<sub>parcel</sub> &minus; T<sub>env</sub>)&thinsp;d(ln&thinsp;p) between the bounds, with the environment interpolated linearly in ln&thinsp;p between the levels given and never extrapolated beyond them. <b>CAPE is computed on temperature, not virtual temperature</b>, since no environmental dewpoint above 700 hPa is entered; Doswell, C.A. III and Rasmussen, E.N. (1994), <i>The Effect of Neglecting the Virtual Temperature Correction on CAPE Calculations</i>, Weather and Forecasting <b>9</b>, 625-629, show that this understates CAPE. Definitions and interpretation thresholds from NOAA/NWS and SPC. SWEAT = 12T<sub>d850</sub> + 20(TT − 49) + 2f<sub>850</sub> + f<sub>500</sub> + 125(S + 0.2), with T<sub>d850</sub> clamped at 0, the TT term zeroed if TT &lt; 49, and the shear term zeroed unless 850 dir is 130-250°, 500 dir is 210-310°, the wind veers, and both speeds are ≥ 15 kt. NWS publishes several different threshold tables for these indices; the bands shown follow NWS Louisville (LI, SSI) and the NWS Skew-T parameter page (KI, TT, SWEAT).'
 });
 
 /* =================================================================
@@ -3692,7 +3805,7 @@ card('say', {
         + (has ? '<pre class="saypre">' + esc(SAY_TEXT) + '</pre>' : '')
     };
   },
-  src:'Comments go to Jef Zerrudo at <b>jbzerrudo@pagasa.dost.gov.ph</b>. A defect in a number is the most valuable thing you can report: give the card, the inputs you typed and the answer you expected, and it can be checked against the published source the card cites. If you would rather your report be public and trackable, open an issue at github.com/jbzerrudo/Kalkunahon/issues instead. This page uses no server, no account and no analytics, and it does not know that you typed anything until you choose to send it.'
+  src:'Comments go to Jef Zerrudo at <b>jbzerrudo@pagasa.dost.gov.ph</b>. A defect in a number is the most valuable thing you can report: give the module, the inputs you typed and the answer you expected, and it can be checked against the published source the module cites. If you would rather your report be public and trackable, open an issue at github.com/jbzerrudo/Kalkunahon/issues instead. This page uses no server, no account and no analytics, and it does not know that you typed anything until you choose to send it.'
 });
 
 card('ref', {

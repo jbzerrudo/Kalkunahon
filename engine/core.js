@@ -1434,29 +1434,35 @@ function envTempAt(levels, p){
   }
   return NaN;
 }
-/* Level of free convection: the pressure at which a parcel lifted from the surface first becomes
-   warmer than its environment and stays warmer to the top of the data. NaN if that never happens
-   within the levels given, which is a real answer and not a failure. */
+/* Level of free convection: the lowest pressure above the surface at which a parcel lifted from
+   the surface first becomes warmer than its environment. It is the FIRST upward crossing from
+   negative to positive buoyancy, nothing more: an earlier version demanded that the parcel still
+   be buoyant at the top of the data, which silently returned NaN for every sounding deep enough
+   to contain an equilibrium level, that is, for exactly the soundings that matter. NaN here means
+   the parcel never becomes buoyant within the levels given, which is a real answer. */
 function lfcPressure(levels, ps, tsC, tdsC, step){
   step = step || 1;
   const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
   if(L.length < 2 || !isNum(ps) || !isNum(tsC) || !isNum(tdsC) || tdsC > tsC) return NaN;
   const pTop = L[L.length-1][0];
   const buoy = p => liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
-  if(!(buoy(pTop) > 0)) return NaN;              // still negatively buoyant at the top: no LFC here
-  let hi = null;                                  // last pressure that is NOT buoyant, coming down
-  for(let p = ps - step; p >= pTop; p -= step){
+  const b0 = buoy(ps);
+  if(isNum(b0) && b0 > 0) return ps;              // buoyant from the ground: no inhibition to clear
+  let lo = null, hi = null;                       // lo = last not buoyant, hi = first buoyant above it
+  let pPrev = ps, bPrev = b0;
+  for(let p = ps - step; p >= pTop - 1e-9; p -= step){
     const b = buoy(p);
-    if(isNum(b) && b <= 0) hi = p;
+    if(!isNum(b)){ pPrev = p; bPrev = b; continue; }
+    if(isNum(bPrev) && bPrev <= 0 && b > 0){ lo = pPrev; hi = p; break; }
+    pPrev = p; bPrev = b;
   }
-  if(hi === null) return ps;                      // buoyant from the surface up
-  let lo = hi, up = hi - step;                    // bracket, then bisect
+  if(lo === null) return NaN;                     // never becomes buoyant inside the data
   for(let i=0;i<60;i++){
-    const mid = 0.5*(lo+up);
-    if(buoy(mid) > 0) lo = mid; else up = mid;
-    if(Math.abs(lo-up) < 1e-6) break;
+    const mid = 0.5*(lo+hi);
+    if(buoy(mid) > 0) hi = mid; else lo = mid;
+    if(Math.abs(lo-hi) < 1e-6) break;
   }
-  return 0.5*(lo+up);
+  return 0.5*(lo+hi);
 }
 /* Convective inhibition, J/kg, as the negative area between the surface and the LFC.
    Returns a negative number, or 0 where the parcel is buoyant from the ground. */
@@ -1468,6 +1474,50 @@ function cinToLfc(levels, ps, tsC, tdsC, pLfc, steps){
   let s = 0;
   for(let i=0;i<steps;i++){
     const p = Math.exp(Math.log(ps) - (i+0.5)*dl);
+    const d = liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+    if(isNum(d)) s += d*dl;
+  }
+  return RD*s;
+}
+/* Equilibrium level: above the LFC, the first pressure at which the parcel becomes colder than
+   its environment again and the positive area closes. NaN when the parcel is still buoyant at the
+   top of the levels given, which is the honest answer and the reason CAPE cannot be reported from
+   levels that stop at 500 hPa: a deep tropical parcel is still some 9 K warmer than its
+   environment at 200 hPa and does not equilibrate until near 120 hPa. */
+function elPressure(levels, ps, tsC, tdsC, pLfc, step){
+  step = step || 1;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  if(L.length < 2 || !isNum(pLfc)) return NaN;
+  const pTop = L[L.length-1][0];
+  if(!(pTop < pLfc)) return NaN;
+  const buoy = p => liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
+  let lo = null, hi = null;                       // lo = last buoyant, hi = first not buoyant above
+  let pPrev = pLfc, bPrev = buoy(pLfc);
+  for(let p = pLfc - step; p >= pTop - 1e-9; p -= step){
+    const b = buoy(p);
+    if(!isNum(b)){ pPrev = p; bPrev = b; continue; }
+    if(isNum(bPrev) && bPrev > 0 && b <= 0){ lo = pPrev; hi = p; break; }
+    pPrev = p; bPrev = b;
+  }
+  if(lo === null) return NaN;                     // still buoyant at the top of the data
+  for(let i=0;i<60;i++){
+    const mid = 0.5*(lo+hi);
+    if(buoy(mid) > 0) lo = mid; else hi = mid;
+    if(Math.abs(lo-hi) < 1e-6) break;
+  }
+  return 0.5*(lo+hi);
+}
+/* CAPE, J/kg, as the positive area between the LFC and the EL. Both bounds must be real: a CAPE
+   integrated to the top of the data instead of to the EL is a lower bound wearing the name of a
+   quantity, and in the tropics the part left out is the larger part. */
+function capeLfcToEl(levels, ps, tsC, tdsC, pLfc, pEl, steps){
+  if(!isNum(pLfc) || !isNum(pEl) || !(pEl < pLfc)) return NaN;
+  steps = steps || 2000;
+  const L = (levels||[]).filter(q=>isNum(q[0])&&isNum(q[1])).sort((a,b)=>b[0]-a[0]);
+  const dl = (Math.log(pLfc)-Math.log(pEl))/steps;
+  let s = 0;
+  for(let i=0;i<steps;i++){
+    const p = Math.exp(Math.log(pLfc) - (i+0.5)*dl);
     const d = liftParcelTo(ps, tsC, tdsC, p) - envTempAt(L, p);
     if(isNum(d)) s += d*dl;
   }
@@ -1523,7 +1573,7 @@ const API = {
   qff,qffTmv,qnhISA,stationFromQnhISA,qnhNWS,pressureAltitude,densityAltitude,
   thickness,meanTvFromThickness,airDensity,
   potentialTemp,invPotentialTemp,boltonTL,thetaE,dryLapse,moistLapse,
-  moistLapseDTDP,liftMoist,envTempAt,lfcPressure,cinToLfc,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
+  moistLapseDTDP,liftMoist,envTempAt,lfcPressure,cinToLfc,elPressure,capeLfcToEl,lclEspy,lclStullPressure,lambertWm1,lclRomps,pvstarl,
   kIndex,totalTotals,verticalTotals,crossTotals,liftParcelTo,liftedIndex,
   showalter,sweat,bulkRichardson
 };

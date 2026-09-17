@@ -643,6 +643,68 @@ ok('rhFromWetBulb round-trips', M.wetBulbPsychro(33, M.rhFromWetBulb(33,25,1013.
 ok('and reads lower than treating Tnw as a dewpoint', M.rhFromWetBulb(33,25,1013.25), 51.98, 0.1, '%');
 eq('a wet bulb above air temperature is NaN', isFinite(M.rhFromWetBulb(30,33,1013.25))?1:0, 0);
 
+
+console.log('\n== LFC, EL AND CAPE ==');
+{
+  // The card's own default profile, surface parcel 31 C / 24 C dewpoint at 1000 hPa.
+  const S10 = [[1000,31],[850,20],[700,9],[500,-9],[400,-20],[300,-33],[250,-42],[200,-53],[150,-68],[100,-80]];
+  const S4  = [[1000,31],[850,20],[700,9],[500,-9]];
+  const S6  = [[1000,31],[850,20],[700,9],[500,-9],[300,-33],[200,-55]];
+  const ps=1000, ts=31, tds=24;
+  const buoy = (L,p) => M.liftParcelTo(ps,ts,tds,p) - M.envTempAt(L,p);
+
+  // The LFC is the FIRST upward crossing, and it must not move when levels are added above it.
+  // The bug this guards: an earlier lfcPressure required the parcel to be buoyant at the top of
+  // the data, so extending the sounding past the EL returned NaN and took CAPE down with it.
+  const lfc4  = M.lfcPressure(S4,  ps, ts, tds);
+  const lfc10 = M.lfcPressure(S10, ps, ts, tds);
+  ok('LFC from four levels',                       lfc4,  857.18, 0.05, 'hPa');
+  ok('adding six levels above it does not move it', lfc10, lfc4,  0.01, 'hPa');
+  // and it is the true zero crossing, not the end of the 1 hPa bracket
+  ok('buoyancy is zero AT the LFC',                buoy(S10, lfc10), 0, 1e-4, 'K');
+  eq('buoyancy is negative 1 hPa below it',        buoy(S10, lfc10+1) < 0, true);
+  eq('buoyancy is positive 1 hPa above it',        buoy(S10, lfc10-1) > 0, true);
+
+  // The EL, and why 300 and 200 hPa are not enough for a tropical parcel.
+  eq('no EL when the data stops at 500 hPa',       isFinite(M.elPressure(S4,  ps,ts,tds, lfc4 ))?1:0, 0);
+  eq('no EL when the data stops at 200 hPa',       isFinite(M.elPressure(S6,  ps,ts,tds, lfc4 ))?1:0, 0);
+  ok('this parcel is still buoyant at 200 hPa',    buoy(S6, 200), 9.30, 0.05, 'K');
+  const el = M.elPressure(S10, ps, ts, tds, lfc10);
+  ok('EL once the data reaches 100 hPa',           el, 126.0, 1.0, 'hPa');
+  ok('buoyancy is zero AT the EL',                 buoy(S10, el), 0, 1e-4, 'K');
+  eq('buoyancy is positive just below the EL',     buoy(S10, el+2) > 0, true);
+  eq('buoyancy is negative just above the EL',     buoy(S10, el-2) < 0, true);
+  eq('an EL at or below the LFC is refused',       isFinite(M.elPressure(S10, ps,ts,tds, 90))?1:0, 0);
+
+  // CAPE: reported only when both bounds are real, never as a silent lower bound.
+  const cape = M.capeLfcToEl(S10, ps, ts, tds, lfc10, el);
+  ok('CAPE between the LFC and the EL',            cape, 4122, 25, 'J/kg');
+  eq('CAPE is NaN when the EL is NaN',             isFinite(M.capeLfcToEl(S4, ps,ts,tds, lfc4, NaN))?1:0, 0);
+  eq('CAPE is NaN when the LFC is NaN',            isFinite(M.capeLfcToEl(S10, ps,ts,tds, NaN, el))?1:0, 0);
+  // an independent coarse check of the same integral, trapezoid on 400 slabs in ln p
+  { let s2=0; const n=400, a=Math.log(lfc10), b=Math.log(el);
+    for(let i=0;i<=n;i++){ const lp=a+(b-a)*i/n; const d=buoy(S10, Math.exp(lp));
+      s2 += (i===0||i===n?0.5:1)*d*(a-b)/n; }
+    ok('CAPE agrees with an independent quadrature', cape, M.RD*s2, 2, 'J/kg'); }
+
+  // CIN keeps its sign and its bound.
+  ok('CIN is negative and closes at the LFC',      M.cinToLfc(S10, ps,ts,tds, lfc10), -40.4, 0.5, 'J/kg');
+  eq('CIN is zero when the parcel starts buoyant', M.cinToLfc(S10, ps,ts,tds, ps), 0);
+
+  // A parcel buoyant from the ground has its LFC at the surface, not NaN.
+  { const warm=[[1000,20],[850,12],[700,2],[500,-18],[300,-45],[200,-58],[150,-70],[100,-80]];
+    ok('LFC at the surface for a parcel buoyant from the ground',
+       M.lfcPressure(warm, 1000, 31, 24), 1000, 1e-9, 'hPa'); }
+
+  // A capped sounding never becomes buoyant: NaN, and not a number pulled from the bracket.
+  { const cap=[[1000,26],[900,28],[850,26],[700,14],[500,-6],[300,-36],[200,-56],[100,-80]];
+    eq('no LFC under a strong lid', isFinite(M.lfcPressure(cap, 1000, 26, 8))?1:0, 0); }
+
+  // Nothing is extrapolated above the top level.
+  eq('envTempAt refuses to extrapolate above the data', isFinite(M.envTempAt(S10, 90))?1:0, 0);
+  eq('envTempAt refuses to extrapolate below it',       isFinite(M.envTempAt(S10, 1010))?1:0, 0);
+}
+
 console.log('\n---------------------------------------------');
 console.log('  PASS', pass, '  FAIL', fail);
 process.exit(fail?1:0);
