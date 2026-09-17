@@ -13,6 +13,19 @@ stated range are flagged rather than silently returned.
 **Download:** grab `Kalkunahon.html` from [Releases](https://github.com/jbzerrudo/Kalkunahon/releases)
 and keep it on a USB stick.
 
+## This is a calculator, not a forecast
+
+It works out what the published equations give for the numbers you type in. It observes nothing,
+predicts nothing, and knows nothing about the weather at your location. **Warnings, signals,
+advisories and forecasts come from your national meteorological service**, and in the Philippines
+that is **PAGASA**. Nothing here supersedes them. Where this tool and an official product
+disagree, the official product governs.
+
+The same applies to the occupational limits it reproduces. The ACGIH heat-stress screening
+criteria and the ISO 7243 method are screening tools for trained users, not a substitute for an
+occupational health assessment, and the KNMI hittekracht scale describes an environment rather
+than a person.
+
 ## What it covers
 
 | Module | Contents |
